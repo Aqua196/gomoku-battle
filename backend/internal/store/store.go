@@ -32,6 +32,8 @@ type Store interface {
 	PlayerByID(id string) (*PlayerRecord, bool)
 	// UpdateNick changes the display nick stored for a session.
 	UpdateNick(playerID, nick string)
+	// DeletePlayer removes a session record entirely (TTL sweep).
+	DeletePlayer(playerID string)
 
 	// UpsertRoom inserts or replaces a room record.
 	UpsertRoom(r RoomRecord)

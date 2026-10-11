@@ -1,6 +1,8 @@
 package game
 
 import (
+	"log"
+	"runtime/debug"
 	"time"
 
 	"github.com/Aqua196/gomoku-battle/backend/internal/protocol"
@@ -48,6 +50,9 @@ type Actor struct {
 	seats   [2]*Seat // indexed by Color-1: Black->0, White->1
 	turnDL  time.Time
 	reconAt map[Color]time.Time // per-side reconnect deadline
+	// bothOfflineAt is when the second seat went offline; the verdict is
+	// suspended then (PROTOCOL §5) and an abandon timer counts down from it.
+	bothOfflineAt time.Time
 }
 
 // New creates an actor for a room; black moves first.
@@ -99,28 +104,49 @@ func (a *Actor) post(f func()) {
 // ---------------------------------------------------------------- run loop
 
 func (a *Actor) run() {
-	defer close(a.done)
+	var turnT, reconT, abandonT *time.Timer
+	var reconC, abandonC <-chan time.Time
+	defer func() {
+		// R5: a panic must never strand the room or trap both players in
+		// StatePlaying — always finish cleanup through onOver.
+		if r := recover(); r != nil {
+			log.Printf("gomoku: game actor panic room=%s: %v\n%s", a.roomID, r, debug.Stack())
+		}
+		close(a.done)
+		for _, t := range []*time.Timer{turnT, reconT, abandonT} {
+			if t != nil {
+				stopTimer(t)
+			}
+		}
+		a.onOver(a.roomID)
+	}()
 
 	a.turnDL = time.Now().Add(a.cfg.MoveTimeout)
 	a.sendGameStart()
 
-	turnT := time.NewTimer(time.Until(a.turnDL))
-	var reconT *time.Timer
-	var reconC <-chan time.Time
+	turnT = time.NewTimer(time.Until(a.turnDL))
 
 	for {
 		select {
 		case f := <-a.mailbox:
 			f()
 		case <-turnT.C:
+			// R6/§5: drain already-arrived events before judging; an
+			// on-time move or reconnect must never be lost to select's
+			// random pick between two ready cases.
+			a.drainMailbox()
 			a.onTurnTimeout()
 		case <-reconC:
+			a.drainMailbox()
 			a.onReconTimeout()
+		case <-abandonC:
+			a.drainMailbox()
+			a.onAbandonTimeout()
 		}
 		if a.status != protocol.RoomPlaying {
 			break
 		}
-		// Re-arm both timers from the current deadlines.
+		// Re-arm all timers from the current deadlines.
 		resetTimer(turnT, time.Until(a.turnDL))
 		if dl, ok := a.earliestRecon(); ok {
 			d := time.Until(dl)
@@ -136,13 +162,37 @@ func (a *Actor) run() {
 			}
 			reconC = nil
 		}
+		if a.bothOffline() {
+			d := a.bothOfflineAt.Add(a.cfg.AbandonTTL).Sub(time.Now())
+			if abandonT == nil {
+				abandonT = time.NewTimer(d)
+			} else {
+				resetTimer(abandonT, d)
+			}
+			abandonC = abandonT.C
+		} else {
+			if abandonT != nil {
+				stopTimer(abandonT)
+			}
+			abandonC = nil
+		}
 	}
+}
 
-	stopTimer(turnT)
-	if reconT != nil {
-		stopTimer(reconT)
+// drainMailbox runs every already-queued event, stopping early if the game
+// ends mid-drain. Used by the timer cases before judging a timeout.
+func (a *Actor) drainMailbox() {
+	for {
+		select {
+		case f := <-a.mailbox:
+			f()
+		default:
+			return
+		}
+		if a.status != protocol.RoomPlaying {
+			return
+		}
 	}
-	a.onOver(a.roomID)
 }
 
 func resetTimer(t *time.Timer, d time.Duration) {
@@ -228,6 +278,9 @@ func (a *Actor) applyDisconnect(playerID string) {
 		return
 	}
 	a.reconAt[c] = time.Now().Add(a.cfg.ReconnectWindow)
+	if !a.seat(c.Other()).Connected {
+		a.bothOfflineAt = time.Now() // second seat out: verdict suspends (§5)
+	}
 	a.send(a.seat(c.Other()).PlayerID, protocol.Marshal(&protocol.OpponentPresenceMsg{
 		Type:      protocol.TOpponentPresence,
 		Connected: false,
@@ -241,8 +294,21 @@ func (a *Actor) applyReconnect(playerID string) {
 		return
 	}
 	a.seat(c).Connected = true
-	delete(a.reconAt, c)
+	a.bothOfflineAt = time.Time{}
 	if a.status != protocol.RoomPlaying {
+		return
+	}
+	// R15/§5 double-disconnect settlement, evaluated on the reconnecting
+	// side's arrival: own window expired -> self loses; else opponent's
+	// window expired -> opponent loses; else play continues.
+	now := time.Now()
+	if dl, ok := a.reconAt[c]; ok && !dl.After(now) {
+		a.finish(c.Other(), protocol.ReasonDisconnectTimeout)
+		return
+	}
+	delete(a.reconAt, c)
+	if dl, ok := a.reconAt[c.Other()]; ok && !dl.After(now) {
+		a.finish(c, protocol.ReasonDisconnectTimeout)
 		return
 	}
 	// Resuming player gets the full state; the opponent hears they are back.
@@ -275,6 +341,9 @@ func (a *Actor) onReconTimeout() {
 	if a.status != protocol.RoomPlaying {
 		return
 	}
+	if a.bothOffline() {
+		return // §5: verdict suspended while both sides are offline
+	}
 	now := time.Now()
 	var loser Color
 	var loserDL time.Time
@@ -287,6 +356,19 @@ func (a *Actor) onReconTimeout() {
 		return // nothing expired yet; timer re-arms
 	}
 	a.finish(loser.Other(), protocol.ReasonDisconnectTimeout)
+}
+
+// onAbandonTimeout retires a game both sides never returned to.
+func (a *Actor) onAbandonTimeout() {
+	if a.status != protocol.RoomPlaying || !a.bothOffline() {
+		return
+	}
+	a.finish(Empty, protocol.ReasonDisconnectTimeout)
+}
+
+// bothOffline reports whether both seats are currently disconnected.
+func (a *Actor) bothOffline() bool {
+	return !a.seat(Black).Connected && !a.seat(White).Connected
 }
 
 // ------------------------------------------------------------------ finish
@@ -396,5 +478,6 @@ func (a *Actor) snapshot() *protocol.GameState {
 		},
 		Winner:    winner,
 		WinReason: reason,
+		ServerNow: protocol.NowMs(),
 	}
 }

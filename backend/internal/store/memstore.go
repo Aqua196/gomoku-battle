@@ -63,6 +63,15 @@ func (s *MemStore) UpdateNick(playerID, nick string) {
 	}
 }
 
+func (s *MemStore) DeletePlayer(playerID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if rec, ok := s.playersByID[playerID]; ok {
+		delete(s.playerIDByT, rec.Token)
+		delete(s.playersByID, playerID)
+	}
+}
+
 func (s *MemStore) UpsertRoom(r RoomRecord) {
 	s.mu.Lock()
 	s.rooms[r.ID] = r
