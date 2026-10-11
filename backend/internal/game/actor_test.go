@@ -244,12 +244,19 @@ func TestDoubleReconnectPresenceToReturner(t *testing.T) {
 		t.Fatalf("A (first returner) should see opponent offline, got %v", presA)
 	}
 
+	// Baseline: white already holds a stale presence{connected:false} —
+	// emitted when black disconnected while white was still online. Only
+	// frames arriving AFTER white's own reconnect count here.
+	cap.mu.Lock()
+	base := len(cap.frames[white])
+	cap.mu.Unlock()
+
 	a.Reconnect(white)
 	deadline = time.Now().Add(2 * time.Second)
 	var presB map[string]any
 	for time.Now().Before(deadline) {
 		cap.mu.Lock()
-		for _, m := range cap.frames[white] {
+		for _, m := range cap.frames[white][base:] {
 			if m["type"] == "opponent_presence" {
 				presB = m
 			}
