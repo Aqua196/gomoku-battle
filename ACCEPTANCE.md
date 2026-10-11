@@ -22,12 +22,12 @@
 | 范围 | 实现 | 证据 | 状态 |
 |---|---|---|---|
 | alpha-beta + 评估函数，3 档 | `internal/ai`（negamax α-β + 迭代深化 + 候选邻域排序；easy=深度2+噪声 / normal=深度4 / hard=~1.8s 迭代深化） | `TestAI*` | ✅ |
-| 人机模式（大厅入口） | `play_ai` → `hub.PlayAI` 建 isAI 房间；AI=embedded Driver 走同一 actor `Move` mailbox，无第二协议路径 | `TestPlayAIFlow` `TestPlayAIInvalidDifficulty` `TestPlayAIWhileInRoom` + 实盘 `docs/evidence/m2-ai-live.txt`（hard 档整局，`winner: white, reason: five`） | ✅(后端) ☐(前端按钮待合) |
+| 人机模式（大厅入口） | `play_ai` → `hub.PlayAI` 建 isAI 房间；AI=embedded Driver 走同一 actor `Move` mailbox，无第二协议路径；前端三难度按钮+人机徽标+「AI 思考中」 | `TestPlayAIFlow` `TestPlayAIInvalidDifficulty` `TestPlayAIWhileInRoom` + 实盘 `docs/evidence/m2-ai-live.txt`（hard 档整局，`winner: white, reason: five`，AI 4 手+绝杀）+ 浏览器 `docs/evidence/m2-e2e-ai.txt`/`m2-e2e-ai.png`（6 手 AI 每手必应、徽标渲染） | ✅ |
 | 单步 ≤2s 超时截断 | 迭代深化+deadline 返回当前最优 | `TestAITimeLimit` | ✅ |
 | **关卡：必杀/必防识别** | — | `TestAIWinInOne`（4 方向×3 档）`TestAIBlockOppFour`（4 局×3 档） | ✅ |
 | **关卡：hard vs 随机 100 局胜率 ≥95%** | — | `TestAIvsRandom100`：胜 100 / 负 0 / 平 0（`docs/evidence/m2-go-test-race.txt`，5.9s -race） | ✅ |
 | **关卡：AI 不阻塞房间管理 goroutine** | — | `TestAINonBlocking`（AI 思考 1.2s 期间 hub 建房/落子响应计时断言） | ✅ |
-| 评审 | — | `docs/reviews/m2.md` | ☐ |
+| 评审 | — | `docs/reviews/m2.md`：**16 条**（2 major/14 minor）全部修复并复测——R1 abandoned 终局（契约 §3/§5 同步）、R2 回归者 presence 权威化+前端快照自愈、R3-R5 引擎/驱动、R7/R10/R11/R14 服务端杂项、R8/R9/R12 前端、R15 伪重连帧、R16 证据脚本修正 | ✅ |
 
 注：合入 M2 后 `TestConcurrent100Rooms` 出现 1 次偶发失败（对端 close 1006，VM 高负载时序），随后 -race 连跑 4 次全绿；记为观察项，M3 压测时复查。
 
