@@ -30,6 +30,21 @@ func newCapture() *capture {
 	return &capture{frames: map[string][]map[string]any{}, over: make(chan string, 1)}
 }
 
+// mark snapshots a key's frame count; framesSince returns only frames
+// appended after the mark — immune to stale pre-condition frames (R14).
+func (c *capture) mark(id string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.frames[id])
+}
+
+func (c *capture) framesSince(id string, mark int) []map[string]any {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := append([]map[string]any(nil), c.frames[id][mark:]...)
+	return out
+}
+
 func (c *capture) send(id string, data []byte) {
 	var m map[string]any
 	_ = json.Unmarshal(data, &m)
@@ -247,21 +262,16 @@ func TestDoubleReconnectPresenceToReturner(t *testing.T) {
 	// Baseline: white already holds a stale presence{connected:false} —
 	// emitted when black disconnected while white was still online. Only
 	// frames arriving AFTER white's own reconnect count here.
-	cap.mu.Lock()
-	base := len(cap.frames[white])
-	cap.mu.Unlock()
-
+	base := cap.mark(white)
 	a.Reconnect(white)
 	deadline = time.Now().Add(2 * time.Second)
 	var presB map[string]any
 	for time.Now().Before(deadline) {
-		cap.mu.Lock()
-		for _, m := range cap.frames[white][base:] {
+		for _, m := range cap.framesSince(white, base) {
 			if m["type"] == "opponent_presence" {
 				presB = m
 			}
 		}
-		cap.mu.Unlock()
 		if presB != nil {
 			break
 		}
