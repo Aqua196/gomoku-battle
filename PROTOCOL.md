@@ -29,7 +29,9 @@
 ```
 
 - `token` 为服务端生成的不可猜随机串（≥16B 熵）。客户端应存入 localStorage 供重连用。
-- 若 `hello.token` 命中一个**已断线**的玩家会话：绑定新连接到该 `playerId`，`resumed=true`；若该玩家在存活对局中，随后立即下发一条 `game_state`。
+- 若 `hello.token` 命中一个**已断线**的玩家会话：绑定新连接到该 `playerId`，`resumed=true`；若该玩家在存活对局中，随后立即下发一条 `game_state`；若无存活对局，客户端必须在短超时（~1.5s）后自行清空本地对局视图回到大厅。
+- 若 `hello.token` 命中**仍在线**的会话：**顶替（takeover）**——服务端立即关闭旧连接、把会话绑定到新连接，`resumed=true`（token 即凭证；多开会话后者赢）。
+- `welcome` 携带 `"serverNow":<ts>` 供客户端估时钟偏差。
 - 超时未 hello → `error{code:"hello_timeout"}` 后关闭。
 
 ### 心跳
@@ -52,8 +54,9 @@
 | `{"type":"play_ai","difficulty":"easy\|normal\|hard"}` | `game_start`（M2） | M1 服务端回复 `error{code:"not_implemented"}` |
 | `{"type":"resign"}` | — | 对局中认输（见 §4） |
 
-- 房间列表变化时，服务端向**所有 lobby 玩家**推送 `room_list`（全量）。
-- 匹配成功：服务端创建 `isAI=false` 的房间，双方收到 `game_start`。队列按 FIFO 两两配对。
+- 房间列表变化时，服务端向**所有 lobby 玩家**推送 `room_list`（全量）。实现要求：同一连接的 `room_list` 推送必须**合并**（发送缓冲内只保留最新一份，脏位合并），防止 churn 期间正常客户端被误判慢消费踢出。
+- 匹配成功：服务端创建 `isAI=false` 的房间，双方收到 `game_start`（配对成功者**不再**收到 `matchmaking{queued}`）。队列按 FIFO 两两配对。
+- 队列中的玩家执行 `create_room`/`join_room`/`play_ai` 会被隐式出队，服务端回 `matchmaking{status:"cancelled"}`。
 - 房间名长度 ≤64；缺省 `"<nick>'s room"`。
 
 ```jsonc
@@ -117,7 +120,8 @@
    "black":{"playerId":"p_x","nick":"...","connected":true,"isAI":false},
    "white":{"playerId":"p_y","nick":"...","connected":true,"isAI":false}
  },
- "winner":null,"winReason":null
+ "winner":null,"winReason":null,
+ "serverNow":1730000000000
 }
 ```
 
@@ -136,7 +140,8 @@
 - 断线方在窗口内用 `hello{token}` 重连：恢复会话与对局视图（welcome.resumed + game_state），清除 `reconnectDeadline`，向对手推 `connected:true`。
 - 窗口到期未回：断线方判负 `disconnect_timeout`。
 - 每次断线重新计 30s 窗口（允许多次重连，各计各的）。
-- `reconnectDeadline` 与 `turnDeadline` 独立计时，先到先生效。
+- `reconnectDeadline` 与 `turnDeadline` 独立计时，先到先生效。**竞先裁决**：计时器触发时必须先排空 mailbox 中已到达的事件再判负（按时到达的落子/重连不得被 select 随机性丢弃）。
+- **双方同时断线**：判负裁决挂起——任一方重连时再结算：重连方自身窗口已过 → 重连方负；否则若对手窗口已过 → 对手负；否则对局继续。双方都永远不回则对局挂起至会话过期清理。
 - 断线时若轮到断线方，`turnDeadline` 照常走；若轮到在线方，在线方仍须在 `turnDeadline` 内落子。
 
 ## 6. 时间常量（服务端实现为可配置参数，测试可缩短）
