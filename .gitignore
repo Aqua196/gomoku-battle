@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+/backend/bin/
+*.test
+coverage.*
+__debug*
+docs/evidence/tmp/
