@@ -13,10 +13,17 @@ services:
       # PPROF: "1"            # uncomment to mount /debug/pprof
       # ALLOW_ANY_ORIGIN: "1" # dev only: skip WS origin check
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
+    # wait on redis so the app does not boot into degraded memory mode by race
 
   redis:
     image: redis:7-alpine
     # session + room-registry persistence; data is rebuildable so no volume
     expose:
       - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 2s
+      retries: 30

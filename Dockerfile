@@ -20,12 +20,15 @@ RUN cd backend && CGO_ENABLED=0 go build -o /out/server ./cmd/server
 
 # --- runtime
 FROM debian:bookworm-slim
-RUN useradd -r -u 10001 app
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* && useradd -r -u 10001 app
 WORKDIR /app
 COPY --from=api /out/server /app/server
 COPY --from=web /build/dist /app/frontend/dist
 USER app
 ENV PORT=8080
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+    CMD curl -fsS http://localhost:${PORT}/healthz || exit 1
 # optional: PPROF=1, REDIS_ADDR=host:6379, ALLOW_ANY_ORIGIN=1
 CMD ["/app/server"]

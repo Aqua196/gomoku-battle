@@ -4,3 +4,11 @@ frontend/dist
 docs
 *.patch
 /tmp
+.github
+REVIEW_*.md
+*.log
+*.out
+prompts
+Dockerfile
+docker-compose.yml
+.dockerignore

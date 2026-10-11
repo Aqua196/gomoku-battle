@@ -95,3 +95,9 @@
 - **观测**：slog 结构化事件（connect/resume/disconnect/room/game over/AI 局，带 playerId/roomId）；`/metrics` JSON：connections/lobbyPlayers/rooms/activeGames/gamesPlayed/totalMoves/movesPerSec(60s)/aiGames（actor SetMoveHook 计数）。
 - **CI**：`.github/workflows/ci.yml`——backend vet + `go test -race`，frontend typecheck/lint/build。
 - **关卡**：`WS_ADDR=ws://host:port/ws go test -run Container ./internal/integration` 对运行中实例（容器）跑 match/整局/重连/AI 全流程。
+
+
+## 9. 安全与威胁模型（M4 评审补充）
+
+- 会话 token（43 字符随机）即身份凭据，明文存于 Redis `pt:`/`p:` 键与内存；部署边界内视为可信——compose 的 redis 仅 `expose` 内网不对外发布。对公网部署应追加 Redis AUTH/TLS（或改回纯内存）。
+- `slog` 与 Redis IO 均在 `h.mu` 持锁内执行：Redis 侧已由 300ms `opTimeout` 封顶（最坏停顿=每次调用 300ms，不会无限冻结）；日志 stderr 阻塞在极端场景仍可能拖慢枢纽——属可接受残余风险（KI-4 未单列，评审记录见 docs/reviews/m4.md R7）。
