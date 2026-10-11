@@ -183,45 +183,65 @@ function reduceServer(state: AppState, msg: ServerMessage): AppState {
           queuePosition: msg.status === 'queued' ? (msg.position ?? null) : null,
         },
       }
-    case 'game_start':
+    case 'game_start': {
+      const opp = opponentOf(msg.game, msg.youColor)
       return {
         ...state,
+        session: applyServerNow(state.session, msg.game.serverNow),
         lobby: { ...state.lobby, myRoomId: null, matchmaking: false, queuePosition: null },
         game: {
           ...initialState.game,
           game: msg.game,
           youColor: msg.youColor,
-          opponentConnected:
-            opponentOf(msg.game, msg.youColor)?.connected ?? true,
+          opponentConnected: opp?.connected ?? true,
+          opponentDeadline: opp && !opp.connected ? msg.game.reconnectDeadline : null,
         },
       }
-    case 'game_state':
+    }
+    case 'game_state': {
+      // game_state is the authoritative snapshot: re-sync the presence view
+      // from it so a missed opponent_presence (e.g. after a double-disconnect
+      // resume) still self-heals (R1/R2 frontend half).
+      const youColor =
+        state.game.youColor ?? deriveYouColor(msg.game, state.session.playerId)
+      const opp = youColor ? opponentOf(msg.game, youColor) : null
       return {
         ...state,
         session: applyServerNow(state.session, msg.game.serverNow),
         game: {
           ...state.game,
           game: msg.game,
-          youColor:
-            state.game.youColor ?? deriveYouColor(msg.game, state.session.playerId),
+          youColor,
+          opponentConnected: opp ? opp.connected : state.game.opponentConnected,
+          opponentDeadline: msg.game.reconnectDeadline,
+          opponentReconnectedAt:
+            opp?.connected && !state.game.opponentConnected
+              ? Date.now()
+              : state.game.opponentReconnectedAt,
           over:
             msg.game.status === 'finished' && state.game.over === null && msg.game.winReason
               ? { reason: msg.game.winReason, winner: msg.game.winner }
               : state.game.over,
         },
       }
-    case 'game_over':
+    }
+    case 'game_over': {
+      const youColor =
+        state.game.youColor ?? deriveYouColor(msg.game, state.session.playerId)
+      const opp = youColor ? opponentOf(msg.game, youColor) : null
       return {
         ...state,
         session: applyServerNow(state.session, msg.game.serverNow),
         game: {
           ...state.game,
           game: msg.game,
-          youColor:
-            state.game.youColor ?? deriveYouColor(msg.game, state.session.playerId),
+          youColor,
+          opponentConnected: opp ? opp.connected : state.game.opponentConnected,
+          opponentDeadline: msg.game.reconnectDeadline,
           over: { reason: msg.reason, winner: msg.winner },
         },
       }
+    }
     case 'opponent_presence':
       return {
         ...state,
