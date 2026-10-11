@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/Aqua196/gomoku-battle/backend/internal/game"
 	"github.com/Aqua196/gomoku-battle/backend/internal/protocol"
@@ -23,6 +24,9 @@ type Conn interface {
 	// Send enqueues one marshaled frame; false means the buffer is full and
 	// the connection is being dropped as a slow consumer.
 	Send(data []byte) bool
+	// SendRoomList queues a room_list snapshot with merge semantics: only
+	// the newest pending snapshot is kept (PROTOCOL §2 dirty-bit merge).
+	SendRoomList(data []byte) bool
 	// Close terminates the connection.
 	Close()
 }
@@ -45,6 +49,9 @@ type Player struct {
 	state  PlayerState
 	roomID string
 	queued bool
+	// disconnectedAt marks when the conn was lost (zero while connected);
+	// drives the session TTL sweep for non-playing sessions (REVIEW R4).
+	disconnectedAt time.Time
 }
 
 // ID returns the player id.
@@ -85,15 +92,61 @@ type Hub struct {
 
 	connCount   atomic.Int64
 	gamesPlayed atomic.Int64
+
+	sweepStop chan struct{}
 }
 
-// New builds a hub around a Store and an injected timing config.
+// New builds a hub around a Store and an injected timing config and starts
+// the session sweeper (R4: disconnected non-playing sessions expire).
 func New(st store.Store, cfg protocol.Config) *Hub {
-	return &Hub{
-		cfg:     cfg,
-		store:   st,
-		players: make(map[string]*Player),
-		rooms:   make(map[string]*roomEntry),
+	h := &Hub{
+		cfg:       cfg,
+		store:     st,
+		players:   make(map[string]*Player),
+		rooms:     make(map[string]*roomEntry),
+		sweepStop: make(chan struct{}),
+	}
+	if cfg.SweepInterval > 0 {
+		go h.sweepLoop()
+	}
+	return h
+}
+
+// Stop halts the background sweeper.
+func (h *Hub) Stop() { close(h.sweepStop) }
+
+// sweepLoop expires disconnected non-playing sessions on SessionTTL. Playing
+// sessions are never reaped here: their fate belongs to the game actor (the
+// reconnect window and the double-disconnect abandon rules come first).
+func (h *Hub) sweepLoop() {
+	ticker := time.NewTicker(h.cfg.SweepInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-h.sweepStop:
+			return
+		case <-ticker.C:
+			h.sweep()
+		}
+	}
+}
+
+func (h *Hub) sweep() {
+	now := time.Now()
+	var expired []string
+	h.mu.Lock()
+	for id, p := range h.players {
+		if p.conn != nil || p.disconnectedAt.IsZero() || p.state == StatePlaying {
+			continue
+		}
+		if now.Sub(p.disconnectedAt) > h.cfg.SessionTTL {
+			delete(h.players, id)
+			expired = append(expired, id)
+		}
+	}
+	h.mu.Unlock()
+	for _, id := range expired {
+		h.store.DeletePlayer(id)
 	}
 }
 
@@ -181,7 +234,7 @@ func (h *Hub) broadcastRoomList() {
 	h.mu.Unlock()
 	data := protocol.Marshal(msg)
 	for _, c := range conns {
-		if !c.Send(data) {
+		if !c.SendRoomList(data) {
 			c.Close()
 		}
 	}
@@ -212,10 +265,11 @@ func protoRoomLocked(e *roomEntry) protocol.Room {
 	}
 }
 
-// dequeueLocked removes p from the FIFO queue if present. Caller holds h.mu.
-func (h *Hub) dequeueLocked(p *Player) {
+// dequeueLocked removes p from the FIFO queue if present and reports
+// whether anything was removed. Caller holds h.mu.
+func (h *Hub) dequeueLocked(p *Player) bool {
 	if !p.queued {
-		return
+		return false
 	}
 	p.queued = false
 	for i, q := range h.queue {
@@ -224,6 +278,7 @@ func (h *Hub) dequeueLocked(p *Player) {
 			break
 		}
 	}
+	return true
 }
 
 // queuePositionLocked returns p's 1-based queue position (0 if not queued).

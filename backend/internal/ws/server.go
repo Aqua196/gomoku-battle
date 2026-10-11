@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -31,16 +32,27 @@ type session struct {
 	player *hub.Player // set once hello succeeds
 }
 
-func NewServer(h *hub.Hub, cfg protocol.Config) *Server {
+// NewServer builds the gateway. allowAnyOrigin passes every Origin header
+// (dev/vite-proxy only); the default policy requires Origin's host to equal
+// the request host, while permitting absent Origin (non-browser clients).
+func NewServer(h *hub.Hub, cfg protocol.Config, allowAnyOrigin bool) *Server {
 	return &Server{
 		hub: h,
 		cfg: cfg,
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  4096,
 			WriteBufferSize: 4096,
-			// Same-port static hosting means no cross-origin traffic in
-			// production (D8); accept all origins for dev/vite-proxy use.
-			CheckOrigin: func(r *http.Request) bool { return true },
+			CheckOrigin: func(r *http.Request) bool {
+				if allowAnyOrigin {
+					return true
+				}
+				origin := r.Header.Get("Origin")
+				if origin == "" {
+					return true // CLI/server-side clients carry no Origin
+				}
+				u, err := url.Parse(origin)
+				return err == nil && u.Host == r.Host
+			},
 		},
 	}
 }

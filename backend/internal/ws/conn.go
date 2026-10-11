@@ -11,20 +11,35 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// outMsg is one queued outbound frame. roomList frames carry a marker so the
+// write pump can resolve them against the latest snapshot instead.
+type outMsg struct {
+	data     []byte
+	roomList bool
+}
+
 // conn wraps one websocket with the buffered outbound channel the hub
 // writes through. It implements hub.Conn.
 type conn struct {
 	ws   *websocket.Conn
-	send chan []byte
+	send chan outMsg
 	quit chan struct{} // closed by Close; writePump flushes then exits
 	cfg  protocol.Config
 	once sync.Once
+
+	// room_list coalescing (PROTOCOL §2 merge requirement): at most one
+	// marker occupies the send buffer; it always resolves to rlPending,
+	// the newest snapshot, so a churn burst can never backlog 64 stale
+	// copies and trip the slow-consumer kick on a healthy client.
+	rlMu      sync.Mutex
+	rlPending []byte
+	rlQueued  bool
 }
 
 func newConn(wsConn *websocket.Conn, cfg protocol.Config) *conn {
 	return &conn{
 		ws:   wsConn,
-		send: make(chan []byte, cfg.SendBuf),
+		send: make(chan outMsg, cfg.SendBuf),
 		quit: make(chan struct{}),
 		cfg:  cfg,
 	}
@@ -34,7 +49,12 @@ func newConn(wsConn *websocket.Conn, cfg protocol.Config) *conn {
 // slow consumer (PROTOCOL §6 SEND_BUF), reported to the caller who closes.
 func (c *conn) Send(data []byte) bool {
 	select {
-	case c.send <- data:
+	case <-c.quit:
+		return false
+	default:
+	}
+	select {
+	case c.send <- outMsg{data: data}:
 		return true
 	case <-c.quit:
 		return false
@@ -43,10 +63,54 @@ func (c *conn) Send(data []byte) bool {
 	}
 }
 
+// SendRoomList queues a room_list snapshot with dirty-bit merge semantics:
+// if an unwritten room_list marker is already queued, only the snapshot is
+// replaced — the buffer never holds more than one pending room_list.
+func (c *conn) SendRoomList(data []byte) bool {
+	c.rlMu.Lock()
+	c.rlPending = data
+	if c.rlQueued {
+		c.rlMu.Unlock()
+		return true // the pending marker will emit this newest snapshot
+	}
+	c.rlQueued = true
+	c.rlMu.Unlock()
+
+	select {
+	case <-c.quit:
+		return false
+	default:
+	}
+	select {
+	case c.send <- outMsg{roomList: true}:
+		return true
+	case <-c.quit:
+		return false
+	default:
+		// No slot even for the marker: the connection is genuinely backed
+		// up with other traffic — report slow consumer.
+		c.rlMu.Lock()
+		c.rlQueued = false
+		c.rlPending = nil
+		c.rlMu.Unlock()
+		return false
+	}
+}
+
 // Close asks the write pump to flush remaining frames, emit a close frame
 // and terminate the socket. Idempotent.
 func (c *conn) Close() {
 	c.once.Do(func() { close(c.quit) })
+}
+
+// takeRoomList swaps out the pending snapshot for a queued marker.
+func (c *conn) takeRoomList() []byte {
+	c.rlMu.Lock()
+	defer c.rlMu.Unlock()
+	data := c.rlPending
+	c.rlPending = nil
+	c.rlQueued = false
+	return data
 }
 
 // writePump drains the send channel and emits the ws-level heartbeat pings.
@@ -62,10 +126,20 @@ func (c *conn) writePump() {
 		_ = c.ws.SetWriteDeadline(time.Now().Add(c.cfg.WriteWait))
 		return c.ws.WriteMessage(websocket.TextMessage, data) == nil
 	}
+	writeMsg := func(m outMsg) bool {
+		if m.roomList {
+			data := c.takeRoomList()
+			if data == nil {
+				return true // snapshot already consumed; nothing to write
+			}
+			return write(data)
+		}
+		return write(m.data)
+	}
 	for {
 		select {
-		case data := <-c.send:
-			if !write(data) {
+		case m := <-c.send:
+			if !writeMsg(m) {
 				return
 			}
 		case <-ticker.C:
@@ -76,8 +150,8 @@ func (c *conn) writePump() {
 		case <-c.quit:
 			for {
 				select {
-				case data := <-c.send:
-					if !write(data) {
+				case m := <-c.send:
+					if !writeMsg(m) {
 						return
 					}
 					continue

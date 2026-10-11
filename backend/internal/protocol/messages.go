@@ -7,15 +7,16 @@ package protocol
 // WelcomeMsg is sent once after a successful hello. Resumed=true means the
 // token bound this connection to a previously disconnected session.
 type WelcomeMsg struct {
-	Type     string `json:"type"`
-	PlayerID string `json:"playerId"`
-	Token    string `json:"token"`
-	Nick     string `json:"nick"`
-	Resumed  bool   `json:"resumed"`
+	Type      string `json:"type"`
+	PlayerID  string `json:"playerId"`
+	Token     string `json:"token"`
+	Nick      string `json:"nick"`
+	Resumed   bool   `json:"resumed"`
+	ServerNow int64  `json:"serverNow"`
 }
 
 func NewWelcome(playerID, token, nick string, resumed bool) *WelcomeMsg {
-	return &WelcomeMsg{Type: TWelcome, PlayerID: playerID, Token: token, Nick: nick, Resumed: resumed}
+	return &WelcomeMsg{Type: TWelcome, PlayerID: playerID, Token: token, Nick: nick, Resumed: resumed, ServerNow: NowMs()}
 }
 
 // PongMsg answers an application-level ping; ts echoes the client ts when
@@ -123,6 +124,7 @@ type GameState struct {
 	Players           GamePlayers `json:"players"`
 	Winner            *string     `json:"winner"`
 	WinReason         *string     `json:"winReason"`
+	ServerNow         int64       `json:"serverNow"`
 }
 
 // GameStartMsg opens a game; YouColor is personalized per recipient.

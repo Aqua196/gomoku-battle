@@ -24,7 +24,7 @@ func main() {
 	cfg := protocol.DefaultConfig()
 	st := store.NewMemStore()
 	h := hub.New(st, cfg)
-	srv := ws.NewServer(h, cfg)
+	srv := ws.NewServer(h, cfg, os.Getenv("ALLOW_ANY_ORIGIN") == "1")
 
 	staticDir := findStaticDir("../frontend/dist", "frontend/dist")
 	handler := srv.Handler(staticDir, os.Getenv("PPROF") == "1")
