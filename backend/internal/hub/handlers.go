@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"log/slog"
 	"time"
 	"unicode/utf8"
 
@@ -30,6 +31,7 @@ func (h *Hub) PlayerDisconnected(p *Player, c Conn) {
 	p.conn = nil
 	p.disconnectedAt = time.Now()
 	h.dequeueLocked(p)
+	slog.Info("player disconnected", "playerId", p.ID(), "roomId", p.roomID)
 	switch p.state {
 	case StateWaiting:
 		if e := h.rooms[p.roomID]; e != nil {
@@ -93,6 +95,7 @@ func (h *Hub) Hello(c Conn, nick, token string) (*Player, bool) {
 				p.state, p.roomID = StateLobby, ""
 			}
 			resumed = true
+			slog.Info("player resumed", "playerId", p.ID(), "roomId", p.roomID)
 		}
 		// Unknown token: fall through and issue a fresh session. A stale
 		// token is not an error for the client.
@@ -101,6 +104,7 @@ func (h *Hub) Hello(c Conn, nick, token string) (*Player, bool) {
 		rec := h.store.CreatePlayer(nick)
 		p = &Player{rec: rec, conn: c, state: StateLobby}
 		h.players[rec.PlayerID] = p
+		slog.Info("player connected", "playerId", p.ID(), "nick", p.Nick())
 	}
 	h.mu.Unlock()
 	if stale != nil {
@@ -190,6 +194,7 @@ func (h *Hub) JoinRoom(p *Player, roomID string) {
 	p.roomID = roomID
 	actor = h.startGameLocked(e)
 	room := protoRoomLocked(e)
+	slog.Info("game started", "roomId", roomID, "joinedBy", p.ID())
 	h.mu.Unlock()
 
 	if dequeued {
@@ -267,6 +272,7 @@ func (h *Hub) Matchmake(p *Player) {
 		e.seats[0], e.seats[1] = a, b
 		a.roomID, b.roomID = e.meta.ID, e.meta.ID
 		actor = h.startGameLocked(e)
+		slog.Info("game started", "roomId", e.meta.ID, "black", a.ID(), "white", b.ID())
 	}
 	h.mu.Unlock()
 
@@ -315,6 +321,8 @@ func (h *Hub) PlayAI(p *Player, difficulty string) {
 	actor = h.startGameLocked(e)
 	actor.SetObserver(ai.NewDriver(actor, actor.Done(), e.seats[1].ID(),
 		protocol.ColorWhite, difficulty, h.cfg.AIThink).Notify)
+	h.aiGames.Add(1)
+	slog.Info("ai game started", "playerId", p.ID(), "roomId", e.meta.ID, "difficulty", difficulty)
 	h.mu.Unlock()
 
 	if dequeued {
@@ -397,6 +405,7 @@ func (h *Hub) startGameLocked(e *roomEntry) *game.Actor {
 		return game.Seat{PlayerID: p.ID(), Nick: p.Nick(), Connected: true, IsAI: p.isAI}
 	}
 	e.actor = game.New(e.meta.ID, seatOf(0), seatOf(1), h.cfg, h.sendToPlayer, h.gameOver)
+	e.actor.SetMoveHook(h.noteMove)
 	return e.actor
 }
 
@@ -409,6 +418,7 @@ func (h *Hub) gameOver(roomID string) {
 		h.mu.Unlock()
 		return
 	}
+	slog.Info("game over", "roomId", roomID, "players", len(e.seats))
 	for _, p := range e.seats {
 		if p != nil {
 			p.state = StateLobby
