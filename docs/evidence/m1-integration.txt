@@ -1,0 +1,11 @@
+$ go test ./internal/integration -v -run "TestConcurrent100Rooms|TestGamePlayToFive|TestReconnectResume|TestReconnectTimeout"
+=== RUN   TestGamePlayToFive
+--- PASS: TestGamePlayToFive (0.00s)
+=== RUN   TestReconnectResume
+--- PASS: TestReconnectResume (0.00s)
+=== RUN   TestReconnectTimeout
+--- PASS: TestReconnectTimeout (0.56s)
+=== RUN   TestConcurrent100Rooms
+--- PASS: TestConcurrent100Rooms (0.80s)
+PASS
+ok  	github.com/Aqua196/gomoku-battle/backend/internal/integration	1.414s
