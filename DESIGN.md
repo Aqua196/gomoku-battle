@@ -78,3 +78,12 @@
 - **广播背压**：room_list 在连接层脏位合并，只投递最新一份，防止 churn 踢出正常客户端。
 - **actor 韧性**：run() defer recover + 无条件 onOver 回收房间与玩家；timer 命中先排空 mailbox 再裁决（先到先生效）；双方同断时判负挂起，重连方到场再结算。
 - **时钟同步**：welcome/game_state 携带 serverNow，前端用 EMA 估算 offset 渲染倒计时。
+
+## 7. M2 AI 设计（internal/ai）
+
+- **结构**：`engine.go`（搜索/评估，纯逻辑、无状态可测）+ `driver.go`（嵌入式假客户端）。Driver 通过 actor 的 `SetObserver` 钩子收 GameState，判定"轮到 AI"才思考，思考在 driver 自己的 goroutine 里跑，结果经 `Actor.Move` 回投——**与真人落子走同一条 mailbox 路径**（校验、计时、广播全部复用，无第二协议路径）。
+- **难度**（`For()`）：easy=固定深度2/广度6/±40%评估噪声/0.4s；normal=深度4/广度10/1.2s；hard=迭代深化到 1.8s/广度14。协议层 deadline 2s 之外，引擎用 `cfg.Think` 自限，超时返回"当前最优"（迭代深化保证任意深度都有完整解）。
+- **搜索**：negamax + alpha-beta；候选点=已有棋子邻域（nearStone）→ `pointScore` 排序（杀棋/封堵优先）→ 截断到 Breadth。`expired()` 在节点内检查 deadline。
+- **强制层**：搜索前先 `winInOne(me)`→`winInOne(opp)`，必杀/必防在**所有难度**无条件执行——关卡测试覆盖三档。
+- **评估**：`boardScore`=Σ 5-窗口棋型分（patScore 0/8/90/1100/16000/win）+ centerBias；终局分=me分−opp分×权重(>1，必防倾向)。
+- **生命周期**：actor 结束关 `done` → driver.loop 退出；AI 座位 `connected` 恒 true，断开/认输只清理真人侧。
