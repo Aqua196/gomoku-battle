@@ -116,6 +116,10 @@ type Config struct {
 	// AIThink caps the AI driver's per-move budget; zero means each
 	// difficulty preset's default (PROTOCOL §8: <= 2s per move).
 	AIThink time.Duration
+	// RoomListFlush coalesces lobby room_list broadcasts: mutations mark
+	// the list dirty and one flush interval emits a single render+push.
+	// Zero means every mutation broadcasts immediately (tests).
+	RoomListFlush time.Duration
 }
 
 // DefaultConfig returns the production constants from PROTOCOL §6.
@@ -132,6 +136,7 @@ func DefaultConfig() Config {
 		SweepInterval:   60 * time.Second,
 		AbandonTTL:      10 * time.Minute,
 		AIThink:         0,
+		RoomListFlush:   50 * time.Millisecond,
 	}
 }
 

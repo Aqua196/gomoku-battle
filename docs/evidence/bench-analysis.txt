@@ -1,0 +1,65 @@
+M3 load-test analysis (real runs, single VM, server PPROF=1 PORT=8080)
+=======================================================================
+
+Tool: backend/cmd/loadtest — real WS conns, create/join deterministic
+pairing (pvp) or play_ai (ai), jittered move interval, lastMove-matched
+broadcast latency (send -> own game_state echo).
+
+Raw files:
+  bench-200.txt           200 rooms / 400 conns, 60s, optimized build
+  bench-500-before.txt    500 rooms, 60s, BEFORE optimization
+  bench-500-after.txt     500 rooms, 60s, AFTER room_list coalescing
+  bench-1000.txt          1000 rooms / ~2000 conns, 60s, optimized build
+  pprof-{before,after}-cpu.{pb.gz,top.txt,cum.txt}   30s CPU @ sustained 500
+  pprof-{before,after}-heap.pb.gz                   alloc_space
+  pprof-{before,after}-goroutine.txt
+
+Move broadcast latency (ms)
+---------------------------
+ tier            p50      p95      p99      max     moves/s   notes
+ 200  after      0.23     2.2      9.5      36      267
+ 500  before     53.3     402.8    682.6    1518    658
+ 500  after      1.01     71.1     942.6    5312    718
+ 1000 after      9.1      1189     3003     6506    945       no collapse;
+                                                          tail degrades
+
+Bottleneck found (pprof, 500-room sustained window)
+---------------------------------------------------
+hub.broadcastRoomList dominated the CPU profile: 420ms cum = 42.9% of a
+980ms window. Every room mutation (create/join/finish) rebuilt the full
+list under h.mu (protoRoomLocked O(rooms): 110ms) + marshaled it
+(protocol.Marshal: 290ms cum) + wrote to every lobby conn. Under churn
+(~10 room events/s * ~500 rooms) that is O(rooms*events) render+marshal
+work plus a socket write storm. alloc_space agreed: roomListMsgLocked
+698MB, protoRoomLocked 224MB, JSON marshaling 2.0GB of 4.3GB total in
+30s.
+
+Optimization: RoomListFlush event coalescing
+---------------------------------------------
+broadcastRoomList now only marks rlDirty under the mutex; a flusher
+goroutine emits at most one render+marshal+push per RoomListFlush
+(50ms in DefaultConfig; 0 = synchronous old path, which the test suite
+injects for determinism). ~20 events/s coalesce to <=1 broadcast/50ms.
+Per-conn dirty-bit merge (M1 R3) still applies on top.
+
+Result: same-tier 500-room run (identical flags, 60s):
+  p50  53.3 -> 1.01 ms   (-98%)
+  p95  402.8 -> 71.1 ms  (-82%)
+  avg  112.2 -> 31.4 ms  (-72%)
+  p99  682.6 -> 942.6 ms (worse tail; floor shows conn write stalls, not
+                          broadcast cost — Syscall6 remains top flat CPU)
+pprof after: broadcastRoomList gone from the profile; roomListFlushLoop
+40ms cum (the whole path incl. marshal), protoRoomLocked 10ms.
+
+Secondary observations
+----------------------
+- No hard collapse at 1000 rooms/2000 conns: 1999/2000 dialed, moves
+  flowed; tail (p95>1s) shows the box saturates socket IO, not a lockup.
+- Syscall6 (epoll/read/write) is ~26-49% of flat CPU at every tier —
+  the remaining headroom is kernel socket work.
+- bytes.Clone/slices.Grow in the heap profile are gorilla ReadMessage
+  payload copies and marshal buffer growth; not worth attacking.
+- read_room_created errors = the client's 5s wait for room{created}
+  expiring under load; counted, retried by re-pair on next loop.
+- Loadtest driver memory: initially buffered full frames (OOM-killed at
+  ~19.5GB); compacted to 40B tuples -> ~110MB at 1000 conns.
