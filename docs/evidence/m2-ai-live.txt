@@ -1,0 +1,4 @@
+welcome: welcome resumed= False
+start: AI nick= AI (hard) isAI= True me= black
+game_over: winner= white reason= five
+RESULT: ai_moves=0 my_moves=5

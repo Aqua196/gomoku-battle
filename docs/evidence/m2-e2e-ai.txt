@@ -1,0 +1,4 @@
+welcome/play_ai via browser CDP: Alice -> 「困难」-> 6 moves
+after my move 1..6: AI white stones 1..6 (AI replies every turn, <2.5s)
+人机 badge: rendered
+screenshot: m2-e2e-ai.png
