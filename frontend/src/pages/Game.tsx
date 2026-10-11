@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ConnBadge } from '../components/ConnBadge'
 import { useNow } from '../hooks/useNow'
 import { useStore } from '../state/store'
+import { aiBadgeLabel, aiOpponent, isAiThinking } from '../state/ai'
 import { BOARD_SIZE, MOVE_TIMEOUT_MS, RECONNECT_WINDOW_MS } from '../ws/protocol'
 import type { Color, GameOverReason, GamePlayer } from '../ws/protocol'
 
@@ -44,6 +45,11 @@ export function Game() {
   const opp: GamePlayer | null = oppColor ? game.players[oppColor] : null
   const oppOnline = gv.opponentConnected && (opp?.connected ?? true)
 
+  // M2: AI seat + 「人机 · 难度」badge + 「AI 思考中」derivation.
+  const aiOpp = aiOpponent(game)
+  const aiBadge = aiBadgeLabel(aiOpp)
+  const aiThinking = isAiThinking(game, aiOpp, gv.youColor, gv.over !== null)
+
   const playing = game.status === 'playing'
   const myTurn = playing && !gv.over && game.turn === gv.youColor
   const turnLeft = game.turnDeadline ? Math.max(0, game.turnDeadline - now) : null
@@ -66,6 +72,7 @@ export function Game() {
         <div className="row spread">
           <h2>
             {game.roomId}
+            {aiBadge && <em className="tag ai">{aiBadge}</em>}
             <span className="muted small"> · 第 {game.moveNumber} 手</span>
           </h2>
           <ConnBadge status={session.status} latencyMs={session.latencyMs} />
@@ -91,7 +98,12 @@ export function Game() {
 
         {playing && (
           <div className={`turn-line ${myTurn ? 'mine' : ''}`}>
-            {myTurn ? '你的回合' : '对手思考中'}
+            {myTurn ? '你的回合' : aiThinking ? 'AI 思考中' : '对手思考中'}
+            {aiThinking && (
+              <span className="dots" aria-hidden>
+                <i />
+              </span>
+            )}
             {turnLeft !== null && <b>{Math.ceil(turnLeft / 1000)}s</b>}
           </div>
         )}

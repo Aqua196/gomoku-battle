@@ -369,6 +369,33 @@ h2 {
   color: var(--accent-2);
   font-weight: 700;
 }
+/* 「AI 思考中」三点呼吸动画 */
+.dots {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 4px;
+  align-self: center;
+}
+.dots::before,
+.dots::after,
+.dots > i {
+  content: '';
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: think 1.2s infinite ease-in-out;
+}
+.dots::after {
+  animation-delay: 0.4s;
+}
+.dots > i {
+  animation-delay: 0.2s;
+}
+@keyframes think {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-2px); }
+}
 .bar {
   height: 6px;
   background: var(--bg-2);
