@@ -20,6 +20,7 @@
 
 ```json
 {"type":"hello","nick":"string(1-32)","token":"可选，断线重连凭证"}
+// nick 经 TrimSpace 后按 rune 计 1–32 字符；纯空白非法
 ```
 
 服务端回：
@@ -88,10 +89,10 @@
 ### game_over
 
 ```jsonc
-{"type":"game_over","reason":"five|draw|timeout|resign|disconnect_timeout","winner":"black|white|null","game":{GameState}}
+{"type":"game_over","reason":"five|draw|timeout|resign|disconnect_timeout|abandoned","winner":"black|white|null","game":{GameState}}
 ```
 
-- `winner:null` 仅当 `reason:"draw"`。
+- `winner:null` 仅当 `reason:"draw"`（平局）或 `reason:"abandoned"`（双方弃局，无负方）。客户端不得按 `winner===null` 直接判平局。
 - game_over 后房间删除，双方回到 lobby 状态；随后可向双方推一次 `room_list`。
 
 ### opponent_presence
@@ -131,8 +132,9 @@
 - 胜负判定四方向：横、竖、主斜、副斜，以新落子为锚点向两侧计数。
 - 满盘 225 手无胜 → `draw`。
 - **回合超时**：每回合 `MOVE_TIMEOUT=30s`，`turnDeadline` 随每手刷新；超时者负，`reason:"timeout"`。
-- **断线**：对局内连接丢失（见 §5），`reason:"disconnect_timeout"`。
+- **断线**：对局内连接丢失（见 §5），`reason:"disconnect_timeout"`。断线恰逢己方回合时 `turnDeadline` 与 `reconnectDeadline` 并行，终局 reason 依计时器先到者可为 `timeout` 或 `disconnect_timeout`（判定结果一致，文案需预期双理由）。
 - **认输**：`resign` 或 playing 中 `leave_room`，`reason:"resign"`。
+- **双方弃局**：双断线挂起后超 AbandonTTL 无人归，`reason:"abandoned"`、`winner:null`。
 
 ## 5. 断线与重连
 
@@ -172,3 +174,12 @@
 - 两个页面：大厅 `/`（昵称输入→房间列表/建房/快速匹配/人机入口）与棋盘 `/game`（棋盘渲染、轮到谁、倒计时、对手在线状态、认输、对局结束弹层→返回大厅）。
 - token/nick 存 localStorage；WS 断开自动指数退避重连并在 hello 中带 token。
 - 棋盘 15×15 CSS grid 或 SVG 均可；必须显示 `lastMove` 高亮与剩余时间。
+
+## 10. AI 对局约定（M2）
+
+- `play_ai{difficulty}`，`difficulty ∈ "easy"|"normal"|"hard"`；非法值回 `error{code:"invalid_difficulty"}`；已在房间回 `already_in_room`。
+- 座位固定：**真人恒执黑先手，AI 恒执白**。房间内 AI 为伪玩家：`players.white = {playerId:"ai_*", nick:"AI (difficulty)", connected:true, isAI:true}`（`connected` 恒真，为渲染值）。
+- isAI 房间出现在 `room_list`（与人人房间同构，status=playing）。
+- AI 思考预算 ≤2s/手（hard 档内迭代深化至 ~1.8s 自限，超时返回当前最优解）。
+- AI 落子与真人同走 `move` 校验与广播路径；真人轮到 AI 回合时发 `move` 被拒 `not_your_turn`。
+- 人机对局中真人断线/认输的判负、重连窗口规则与人人对局完全一致。
