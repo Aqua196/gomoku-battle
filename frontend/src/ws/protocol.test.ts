@@ -18,13 +18,14 @@ function sampleGame(): GameState {
     },
     winner: null,
     winReason: null,
+    serverNow: 1730000000000,
   }
 }
 
 describe('parseServerMessage', () => {
   it('accepts every server→client message type (PROTOCOL §0–§3)', () => {
     const msgs: unknown[] = [
-      { type: 'welcome', playerId: 'p_1', token: 't', nick: 'n', resumed: false },
+      { type: 'welcome', playerId: 'p_1', token: 't', nick: 'n', resumed: false, serverNow: 1730000000000 },
       { type: 'pong', ts: 1730000000000 },
       { type: 'room', action: 'created', room: { id: 'r_1', name: 'x', status: 'waiting', players: [], isAI: false, createdAt: 1 } },
       { type: 'room', action: 'joined', room: { id: 'r_1', name: 'x', status: 'waiting', players: [], isAI: false, createdAt: 1 } },

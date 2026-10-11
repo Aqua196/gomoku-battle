@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { deriveYouColor, initialState, reducer } from './store'
+import {
+  RESUME_GRACE_MS,
+  createResumeWatchdog,
+  smoothClockOffset,
+} from './clock'
 import type { AppState } from './store'
 import type { GameState, Room, ServerMessage } from '../ws/protocol'
 
@@ -19,6 +24,7 @@ function game(over: Partial<GameState> = {}): GameState {
     },
     winner: null,
     winReason: null,
+    serverNow: 1730000000000,
     ...over,
   }
 }
@@ -32,16 +38,28 @@ const room: Room = {
   createdAt: 1,
 }
 
-function welcomed(): AppState {
+function welcomed(resumed = false): AppState {
   return reducer(initialState, {
     type: 'SERVER',
-    msg: { type: 'welcome', playerId: 'p_me', token: 'tok', nick: 'me', resumed: false },
+    msg: {
+      type: 'welcome',
+      playerId: 'p_me',
+      token: 'tok',
+      nick: 'me',
+      resumed,
+      serverNow: 1730000000000,
+    },
   })
 }
 
 const srv = (state: AppState, msg: ServerMessage) => reducer(state, { type: 'SERVER', msg })
 
 describe('store reducer', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
   it('welcome establishes the session', () => {
     const s = welcomed()
     expect(s.session.playerId).toBe('p_me')
@@ -82,13 +100,108 @@ describe('store reducer', () => {
 
   it('resume path: bare game_state derives youColor from playerId', () => {
     // After reconnect the server sends welcome(resumed) + game_state — no game_start.
-    let s = reducer(initialState, {
-      type: 'SERVER',
-      msg: { type: 'welcome', playerId: 'p_me', token: 'tok', nick: 'me', resumed: true },
-    })
+    let s = welcomed(true)
     s = srv(s, { type: 'game_state', game: game() })
     expect(s.game.youColor).toBe('black')
     expect(s.game.game?.roomId).toBe('r_1')
+  })
+
+  it('R1: welcome(resumed=false) clears stale lobby/game views', () => {
+    // Stale view left over from a lost session (server restart / expired token).
+    let s = welcomed()
+    s = srv(s, { type: 'room', action: 'created', room })
+    s = srv(s, { type: 'game_start', game: game(), youColor: 'black' })
+    expect(s.game.game).not.toBeNull()
+
+    s = srv(s, {
+      type: 'welcome',
+      playerId: 'p_me2',
+      token: 'tok2',
+      nick: 'me',
+      resumed: false,
+      serverNow: 1730000000000,
+    })
+    expect(s.game.game).toBeNull()
+    expect(s.game.over).toBeNull()
+    expect(s.lobby).toEqual(initialState.lobby)
+    expect(s.session.playerId).toBe('p_me2')
+  })
+
+  it('R1: welcome(resumed=true) keeps views until game_state or watchdog clears', () => {
+    let s = welcomed()
+    s = srv(s, { type: 'game_start', game: game(), youColor: 'black' })
+    s = srv(s, {
+      type: 'welcome',
+      playerId: 'p_me',
+      token: 'tok',
+      nick: 'me',
+      resumed: true,
+      serverNow: 1730000000000,
+    })
+    // Still pinned — either a live game_state follows or the provider
+    // watchdog fires CLEAR_GAME after RESUME_GRACE_MS.
+    expect(s.game.game).not.toBeNull()
+    s = srv(s, { type: 'game_state', game: game({ moveNumber: 5 }) })
+    expect(s.game.game?.moveNumber).toBe(5)
+  })
+
+  it('R1: resume watchdog fires once and can be cancelled', () => {
+    vi.useFakeTimers()
+    const onExpire = vi.fn()
+    const wd = createResumeWatchdog(onExpire)
+    wd.arm()
+    vi.advanceTimersByTime(RESUME_GRACE_MS - 1)
+    expect(onExpire).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(onExpire).toHaveBeenCalledTimes(1)
+
+    wd.arm()
+    wd.cancel()
+    vi.advanceTimersByTime(RESUME_GRACE_MS)
+    expect(onExpire).toHaveBeenCalledTimes(1)
+
+    // re-arm resets the timer
+    wd.arm()
+    vi.advanceTimersByTime(RESUME_GRACE_MS - 10)
+    wd.arm()
+    vi.advanceTimersByTime(RESUME_GRACE_MS - 1)
+    expect(onExpire).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(1)
+    expect(onExpire).toHaveBeenCalledTimes(2)
+  })
+
+  it('R10: serverNow drives the clock-offset estimate', () => {
+    vi.setSystemTime(1_000_000)
+    let s = srv(initialState, {
+      type: 'welcome',
+      playerId: 'p',
+      token: 't',
+      nick: 'n',
+      resumed: false,
+      serverNow: 1_000_500,
+    })
+    expect(s.session.clockOffsetMs).toBe(500)
+
+    // Second sample smooths via EMA (0.3): 500 + 0.3 * (0 - 500) = 350.
+    vi.setSystemTime(1_001_000)
+    s = srv(s, { type: 'game_state', game: game({ serverNow: 1_001_000 }) })
+    expect(s.session.clockOffsetMs).toBeCloseTo(350)
+  })
+
+  it('smoothClockOffset: first sample seeds, later samples smooth', () => {
+    expect(smoothClockOffset(null, 100)).toBe(100)
+    expect(smoothClockOffset(100, 200)).toBeCloseTo(130)
+    expect(smoothClockOffset(-50, -100)).toBeCloseTo(-65)
+  })
+
+  it('R14: LOCAL_ERROR surfaces a toast entry', () => {
+    const s = reducer(welcomed(), {
+      type: 'LOCAL_ERROR',
+      code: 'offline',
+      message: 'down',
+    })
+    expect(s.error?.code).toBe('offline')
+    expect(s.error?.message).toBe('down')
   })
 
   it('game_state refreshes the board; game_over resolves the result', () => {

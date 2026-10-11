@@ -102,6 +102,8 @@ export interface WelcomeMsg {
   token: string
   nick: string
   resumed: boolean
+  /** server clock ts for client offset estimation (§1) */
+  serverNow: number
 }
 export interface PongMsg {
   type: 'pong'
@@ -182,6 +184,8 @@ export interface GameState {
   players: { black: GamePlayer; white: GamePlayer }
   winner: Color | null
   winReason: GameOverReason | null
+  /** server clock ts when this snapshot was produced */
+  serverNow: number
 }
 
 export type ServerMessage =
