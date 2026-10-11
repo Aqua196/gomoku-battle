@@ -2,11 +2,16 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -23,6 +28,7 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -42,3 +48,20 @@ jobs:
       - name: build
         working-directory: frontend
         run: npm run build
+
+  docker-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: compose up
+        run: docker compose up -d --build --wait
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+      - name: container gate
+        working-directory: backend
+        run: WS_ADDR=ws://localhost:8080/ws go test -count=1 -v -run Container ./internal/integration/
+      - name: compose down
+        if: always()
+        run: docker compose down -v

@@ -7,6 +7,7 @@ package store
 import (
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 )
@@ -150,5 +151,67 @@ func TestRedisStoreDialFail(t *testing.T) {
 	mr.Close()
 	if _, err := NewRedisStore(addr); err == nil {
 		t.Fatal("expected dial failure")
+	}
+}
+
+// RedisStore-only: expired room keys leave corpse ids in the `rooms` set;
+// ListRooms must sweep them so the index does not leak monotonically.
+func TestRedisStoreRoomIndexSweep(t *testing.T) {
+	mr := miniredis.RunT(t)
+	st, err := NewRedisStore(mr.Addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 5; i++ {
+		st.UpsertRoom(RoomRecord{ID: "r" + string(rune('a'+i))})
+	}
+	if got := len(st.ListRooms()); got != 5 {
+		t.Fatalf("before expiry: %d rooms", got)
+	}
+	mr.FastForward(2 * time.Hour)
+	if got := len(st.ListRooms()); got != 0 {
+		t.Fatalf("after expiry: %d rooms", got)
+	}
+	ids, _ := mr.SMembers("rooms") // empty set deletes the key: error is fine
+	if len(ids) != 0 {
+		t.Fatalf("rooms index leaked %v corpse ids", ids)
+	}
+}
+
+// RedisStore-only: reads slide the player TTL forward, so a player active
+// near the 24h edge is not evicted mid-session.
+func TestRedisStoreSlidingTTL(t *testing.T) {
+	mr := miniredis.RunT(t)
+	st, err := NewRedisStore(mr.Addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := st.CreatePlayer("alice")
+	mr.FastForward(23 * time.Hour)
+	if _, ok := st.PlayerByID(rec.PlayerID); !ok {
+		t.Fatal("player missing before TTL")
+	}
+	mr.FastForward(2 * time.Hour) // 25h since write, ~2h since sliding read
+	if _, ok := st.PlayerByID(rec.PlayerID); !ok {
+		t.Fatal("player evicted despite sliding TTL")
+	}
+}
+
+// RedisStore-only: every call is bounded by opTimeout; a dead Redis must
+// not hang the caller (the hub lock it runs under) for seconds.
+func TestRedisStoreBoundedWhenDown(t *testing.T) {
+	mr := miniredis.RunT(t)
+	st, err := NewRedisStore(mr.Addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := st.CreatePlayer("bob")
+	mr.Close()
+	start := time.Now()
+	st.PlayerByID(rec.PlayerID)
+	st.UpsertRoom(RoomRecord{ID: "x"})
+	st.ListRooms()
+	if d := time.Since(start); d > 3*time.Second {
+		t.Fatalf("degraded calls took %v (unbounded freeze)", d)
 	}
 }

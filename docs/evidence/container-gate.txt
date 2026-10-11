@@ -2,6 +2,6 @@
     container_test.go:108: match→game→five win: PASS
     container_test.go:158: disconnect→token reconnect restore: PASS
     container_test.go:189: play_ai full round-trip: PASS
---- PASS: TestContainerMatchGameReconnectAI (0.05s)
+--- PASS: TestContainerMatchGameReconnectAI (0.08s)
 PASS
-ok  	github.com/Aqua196/gomoku-battle/backend/internal/integration	1.061s
+ok  	github.com/Aqua196/gomoku-battle/backend/internal/integration	1.096s

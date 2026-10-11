@@ -45,10 +45,23 @@
 
 | 范围 | 证据 | 状态 |
 |---|---|---|
-| Dockerfile + docker-compose 一条命令 | `docs/evidence/compose-*.txt` | ☐ |
-| Store 的 Redis 实现（可选启用）+ 测试 | `internal/store/redis*` | ☐ |
-| 日志+基础指标 | `/metrics` 输出 | ☐ |
-| GitHub Actions CI（test+race） | workflow 运行记录或本地等价验证 | ☐ |
-| README（简介/架构图/启动/演示流程） | — | ☐ |
-| **关卡：compose 起栈后集成测试对容器通过** | 命令+输出 | ☐ |
-| 评审 | `docs/reviews/m4.md` | ☐ |
+| Dockerfile + docker-compose 一条命令 | `docker compose up -d --build --wait` → redis Healthy→app Healthy；日志 `store: redis` 实连 | ✅ |
+| Store 的 Redis 实现（可选启用）+ 测试 | `internal/store/redis.go`（REDIS_ADDR 启用/降级）；contract 套件双实现 + miniredis 实证：TTL 过期、滑动 TTL、rooms 索引清扫、宕机有界 | ✅ |
+| 日志+基础指标 | `/metrics` 输出含 totalMoves/movesPerSec/aiGames；slog 事件行（connect/resume/game over） | ✅ |
+| GitHub Actions CI（test+race） | `ci.yml`：backend vet+race、frontend typecheck/lint/build、docker-gate（compose up + WS_ADDR 容器关卡）；本仓库无 Actions runner，按 workflow 语法校验 + 本地等价执行验证 | ✅ |
+| README（简介/架构图/启动/演示流程） | README.md | ✅ |
+| **关卡：compose 起栈后集成测试对容器通过** | `WS_ADDR=ws://localhost:8080/ws go test -race -run Container ./internal/integration -v` → 三段 PASS（含构建健康检查后），`docs/evidence/container-gate.txt` | ✅ |
+| 评审 | `docs/reviews/m4.md`（15 条；R1 锁内 IO→opTimeout、R3 健康检查、R4 TTL/索引泄漏、R5/R11 CI、R8 窗口修剪、R9 HEALTHCHECK/ca-cert、R10 索引孤儿、R13 契约、R14 契约用例——已修；R2 降级语义→KI-3、R6/R7/R9-pin/R12/R15 已记档） | ✅ |
+
+### M4 评审修复（docs/reviews/m4.md）
+- **R1** Redis IO 全在 `h.mu` 锁内 → 每调用 300ms `opTimeout` 封顶（`redis.go op()`）；实测宕机 3 连调 <3s（`TestRedisStoreBoundedWhenDown`）。
+- **R3** compose 竞态 → redis `healthcheck` + `depends_on.condition: service_healthy` + `NewRedisStore` ~5s ping 重试。
+- **R4** rooms 集合尸体泄漏（探针实证）→ `ListRooms` 单 pipeline 拉取 + SRem 清扫（`TestRedisStoreRoomIndexSweep`）；玩家 TTL 读不滑动 → pipeline GET+EXPIRE 滑动（`TestRedisStoreSlidingTTL`）。
+- **R10** DeletePlayer 记录损坏留 token 孤儿 → 新增 `pti:` id→token 索引，删三键。
+- **R5/R11** CI → 新增 docker-gate job（compose up + 容器关卡）、`permissions: contents:read`、timeout、push 仅 main。
+- **R8** moveTimes 只读时修剪 → `noteMove` 写路径顺带修剪窗口。
+- **R9** Dockerfile → `HEALTHCHECK`（curl /healthz）+ ca-certificates。
+- **R13** `/metrics` 语义 → PROTOCOL §7 已写明 movesPerSec=trailing-60s、aiGames=启动累计。
+- **R2** 运行期 Redis 故障降级语义（瞬时故障→会话分叉）→ opTimeout 封顶 + 如实记 KI-3，不假装已彻底解决。
+- **R6/R7/R12/R15** container_test 单测耦合/slog 持锁/token 明文/.dockerignore → 已记档（R15 已收紧忽略列表；R7 为 DESIGN §9 中声明的残余风险）。
+- **R14** contract 套件缺口 → 补 TTL/滑动/有界降级三用例。

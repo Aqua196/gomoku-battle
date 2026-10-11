@@ -175,7 +175,16 @@ func (h *Hub) ConnClosed() { h.connCount.Add(-1) }
 func (h *Hub) noteMove(_ string) {
 	h.totalMoves.Add(1)
 	h.mtx.Lock()
-	h.moveTimes = append(h.moveTimes, time.Now().UnixNano())
+	now := time.Now().UnixNano()
+	h.moveTimes = append(h.moveTimes, now)
+	// prune the window on write too, so the slice stays O(60s of moves)
+	// even when nobody ever hits /metrics
+	cutoff := now - int64(time.Minute)
+	i := 0
+	for i < len(h.moveTimes) && h.moveTimes[i] < cutoff {
+		i++
+	}
+	h.moveTimes = append(h.moveTimes[:0], h.moveTimes[i:]...)
 	h.mtx.Unlock()
 }
 

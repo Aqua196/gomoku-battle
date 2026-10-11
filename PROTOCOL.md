@@ -161,7 +161,8 @@
 ## 7. HTTP 端点（同一端口）
 
 - `GET /healthz` → `200 "ok"`
-- `GET /metrics` → `{"connections":int,"lobbyPlayers":int,"rooms":int,"activeGames":int,"gamesPlayed":int}` （M4 扩展）
+- `GET /metrics` → `{"connections":int,"lobbyPlayers":int,"rooms":int,"activeGames":int,"gamesPlayed":int,"totalMoves":int,"movesPerSec":float,"aiGames":int}`
+  - `movesPerSec`：trailing-60s 窗口内接受落子数 / 60；`aiGames`：人机局启动累计（≠完成数）；其余为瞬时快照。
 - `/debug/pprof/*`：仅当环境变量 `PPROF=1` 时挂载
 - 生产模式后端直接托管 `frontend/dist` 静态资源（SPA fallback 到 index.html）；开发模式用 vite proxy 转发 `/ws` `/healthz` `/metrics`，无需 CORS。
 
