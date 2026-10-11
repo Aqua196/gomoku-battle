@@ -87,3 +87,11 @@
 - **强制层**：搜索前先 `winInOne(me)`→`winInOne(opp)`，必杀/必防在**所有难度**无条件执行——关卡测试覆盖三档。
 - **评估**：`boardScore`=Σ 5-窗口棋型分（patScore 0/8/90/1100/16000/win）+ centerBias；终局分=me分−opp分×权重(>1，必防倾向)。
 - **生命周期**：actor 结束关 `done` → driver.loop 退出；AI 座位 `connected` 恒 true，断开/认输只清理真人侧。
+
+## 8. M4 工程化（部署/持久化/观测）
+
+- **交付形态**：单一 Dockerfile 多阶段（node 构建 dist → go 构建 server → debian-slim 非 root 运行）；compose 一条命令起 app+redis。前端仍由后端 :8080 同端口托管（无跨域、无第二服务）。
+- **Store**：`internal/store` 接口双实现——MemStore（默认）与 RedisStore（`REDIS_ADDR` 启用；sessions 24h TTL + token 二级索引、rooms 1h TTL；错误一律降级 miss+warn，绝不阻塞对局热路径）。两实现共用一套表驱动 contract 测试，RedisStore 走 miniredis（进程内真协议）。
+- **观测**：slog 结构化事件（connect/resume/disconnect/room/game over/AI 局，带 playerId/roomId）；`/metrics` JSON：connections/lobbyPlayers/rooms/activeGames/gamesPlayed/totalMoves/movesPerSec(60s)/aiGames（actor SetMoveHook 计数）。
+- **CI**：`.github/workflows/ci.yml`——backend vet + `go test -race`，frontend typecheck/lint/build。
+- **关卡**：`WS_ADDR=ws://host:port/ws go test -run Container ./internal/integration` 对运行中实例（容器）跑 match/整局/重连/AI 全流程。
