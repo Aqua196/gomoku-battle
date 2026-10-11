@@ -29,6 +29,7 @@ type readResult struct {
 type Client struct {
 	conn     *websocket.Conn
 	incoming chan readResult
+	wmu      sync.Mutex
 	mu       sync.Mutex
 	pending  []map[string]any
 }
@@ -62,36 +63,74 @@ func DialOpts(rawurl string, header http.Header, suppressPong bool) (*Client, er
 }
 
 // pump owns the socket read path: exactly one reader, no deadlines.
+// Deliveries are non-blocking: a stalled consumer would freeze the pump
+// and hide the disconnect notice, so a full inbox closes the conn instead
+// (the reader then sees a concrete error, not a silent wedge).
 func (c *Client) pump() {
 	for {
 		_, data, err := c.conn.ReadMessage()
 		if err != nil {
-			c.incoming <- readResult{err: err}
+			c.deliver(readResult{err: err})
 			return
 		}
 		var m map[string]any
 		if err := json.Unmarshal(data, &m); err != nil {
-			c.incoming <- readResult{err: fmt.Errorf("wsclient: non-JSON frame: %w", err)}
+			c.deliver(readResult{err: fmt.Errorf("wsclient: non-JSON frame: %w", err)})
 			continue
 		}
-		c.incoming <- readResult{m: m}
+		c.deliver(readResult{m: m})
 	}
 }
 
-// Send writes a JSON object.
+func (c *Client) deliver(r readResult) {
+	select {
+	case c.incoming <- r:
+	default:
+		_ = c.conn.Close() // consumer stalled: force an observable error
+	}
+}
+
+// Send writes a JSON object. A mutex serializes concurrent writers:
+// gorilla permits one writer at a time and interleaved frames corrupt.
 func (c *Client) Send(v any) error {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
+	c.wmu.Lock()
+	defer c.wmu.Unlock()
 	return c.conn.WriteMessage(websocket.TextMessage, data)
 }
 
 // SendMap is Send for a map literal.
 func (c *Client) SendMap(m map[string]any) error { return c.Send(m) }
 
+// SendTimeout is Send with a bounded write window: if the peer stops
+// draining, the write fails instead of blocking forever. A timed-out
+// write leaves the conn write-broken, so callers should treat an error
+// come-from-deadline as fatal for that conn.
+func (c *Client) SendTimeout(v any, d time.Duration) error {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	c.wmu.Lock()
+	defer c.wmu.Unlock()
+	_ = c.conn.SetWriteDeadline(time.Now().Add(d))
+	err = c.conn.WriteMessage(websocket.TextMessage, data)
+	_ = c.conn.SetWriteDeadline(time.Time{})
+	return err
+}
+
+// SendMapTimeout is SendTimeout for a map literal.
+func (c *Client) SendMapTimeout(m map[string]any, d time.Duration) error {
+	return c.SendTimeout(m, d)
+}
+
 // SendRaw writes raw text (for malformed-frame tests).
 func (c *Client) SendRaw(s string) error {
+	c.wmu.Lock()
+	defer c.wmu.Unlock()
 	return c.conn.WriteMessage(websocket.TextMessage, []byte(s))
 }
 
@@ -101,7 +140,7 @@ func (c *Client) Hello(nick, token string) (map[string]any, error) {
 	if token != "" {
 		msg["token"] = token
 	}
-	if err := c.Send(msg); err != nil {
+	if err := c.SendTimeout(msg, 5*time.Second); err != nil {
 		return nil, err
 	}
 	return c.WaitType("welcome", 5*time.Second)

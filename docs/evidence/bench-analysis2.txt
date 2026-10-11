@@ -1,0 +1,61 @@
+M3 评审修复后重测 —— bench2 三档真实数据（60s/档，move-interval 50ms，ramp 5ms）
+================================================================================
+
+新旧数据对比（move→game_state 广播延迟 ms / 吞吐 moves/s / 完局数）
+------------------------------------------------------------------
+
+档       | 口径     | p50     | p95      | p99      | moves/s | games
+---------+----------+---------+----------+----------+---------+--------------
+200/400c | 旧(失真) | 0.23    | 2.16     | 9.46     | 267     | 216 / 216
+         | 新(真实) | 0.22    | 0.47     | 1.82     | 3969    | 2432 / 1212
+---------+----------+---------+----------+----------+---------+--------------
+500/1k c | 旧(失真) | 1.01    | 71.1     | 942.6    | 718     | 591 / 591
+         | 新(真实) | 0.24    | 1.12     | 3.82     | 9785    | 6008 / 3072
+---------+----------+---------+----------+----------+---------+--------------
+1000/2kc | 旧(失真) | 9.09    | 1189.4   | 3002.6   | 945     | 1047 / 1047
+         | 新(真实) | 0.42    | 8.67     | 20.76    | 18458   | 11327 / 5708
+
+修正幅度
+--------
+- 吞吐（真实有载窗口=首个 conns>0 样本→末个 conns>0 样本，实测 59.0s）：
+  200 档 +14.9x，500 档 +13.6x，1000 档 +19.5x。旧工具因僵尸读协程每对≈1
+  局后瘫痪，且 30s 后连接被服务端批量踢死，完局数与吞吐被双重低估。
+- 延迟尾部：p95/p99 大幅下修（500 档 p95 71→1.1ms、p99 943→3.8ms；
+  1000 档 p99 3003→20.8ms）。旧样本被"接收判定过宽"的假接收与驱逐帧
+  幸存者偏差污染；新判定要求 lastMove==(x,y) 且 turn 已翻转至对手色。
+- 完局口径：旧数据 games_finished==started（恒真，无意义）；新口径仅计
+  收到 game_over 的局，deadline 时在局内未完的如实记为差值。
+- games_started 比旧值高一个数量级：同一窗口内配对可持续重开整局。
+
+错误计数说明（全部计入、不隐藏）
+------------------------------
+- already_in_room（894/1667/2027）：game_over 帧先于 actor onOver 释放座位
+  到达客户端，重开 create 命中的合法竞态；harness 退避 20ms 重试，每次
+  失败都计数。属于可恢复的瞬态，非丢失。
+- not_in_room（63/509/1801）：pair 异常退出（desync/连接断）后 harness 发
+  leave_room 清理，若座位恰好已被 game_over 释放则收到此错误。同样计数。
+- conn_dead 仅计对局中途连接真断（teardown 关闭不计）。本轮三档为 0。
+- metrics_poll / metrics_decode 计数服务端 /metrics 采样失败（本轮 0-3）。
+
+工具修复清单（对应 docs/reviews/m3.md）
+--------------------------------------
+R1 正常 pong 握手（suppressPong 仅 e2e 用）→ 60s 档真为 60s 负载
+R2 forwarder 绑定 pair 生命周期（done channel），握手与对局共用一条
+   frames 通道——无僵尸读协程抢帧
+R3 接收判定=lastMove 坐标 AND turn 翻转；本地占用板杜绝 illegal_move；
+   not_your_turn 单独记 desync 不混预期
+R4 evicted 帧计数；吞吐按真实有载窗口；moves_sent/accepted 分列；
+   games_finished 只计 game_over
+R5 pollMetrics 加锁 + http.Client{Timeout} + decode 错误计数
+R6 配对握手 error 按 code 计数（不再统一误记 read_room_created）
+R9 wsclient pump 投递不阻塞（满则关连，错误可观察）；Send 加写锁
+R10 RoomListFlush=0 同步路径不再写 rlDirty 死位
+R11 nextFrame 复用共享 deadline channel；latency 蓄水池采样（Vitter R，
+   20 万上限）；USER_HZ 读 getconf CLK_TCK 不硬编码
+R12 connect_hello_ms 口径=dial+hello 完成（端到端可用连接）
+R14 测试断言改用 framesSince(key, mark) helper
+另修（重测中暴露）：deadline 改 close-broadcast channel（time.After 只投递
+一次会静默卡死 199/200 对）；写路径全部 SendTimeout 5s（裸 WriteMessage
+可无限阻塞）；hello 写也限时；pair 非 game_over 退出后 leave_room 再重开。
+
+验证门槛：go test -race -count=1 ./... 全绿；go vet ./... 干净。
