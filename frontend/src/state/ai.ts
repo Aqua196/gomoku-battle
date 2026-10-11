@@ -24,11 +24,19 @@ export function aiOpponent(game: GameState): GamePlayer | null {
   return null
 }
 
+/** Color of the AI seat; null for human-vs-human games. */
+export function aiSeatColor(game: GameState): Color | null {
+  if (game.players.black.isAI) return 'black'
+  if (game.players.white.isAI) return 'white'
+  return null
+}
+
 /**
  * 「人机 · 难度」badge text for an AI opponent, e.g. 人机 · 普通.
- * The server names AI seats `AI (easy|normal|hard)` — the difficulty is
- * parsed out of the nick; falls back to the raw parenthetical / nick.
- * Returns null for human opponents.
+ * Contract (PROTOCOL §10): the server names AI seats `AI (difficulty)`
+ * where difficulty is easy|normal|hard — the badge parses that nick
+ * rather than relying on an extra field. Falls back to the raw
+ * parenthetical / nick. Returns null for human opponents.
  */
 export function aiBadgeLabel(aiPlayer: GamePlayer | null): string | null {
   if (!aiPlayer?.isAI) return null
@@ -44,14 +52,10 @@ export function aiBadgeLabel(aiPlayer: GamePlayer | null): string | null {
 /**
  * Between my move landing (game_state, turn = AI) and the AI's reply
  * (game_state, turn = me) the board shows 「AI 思考中…」. Derives purely
- * from turn ownership; no new message type.
+ * from turn ownership vs the AI seat's color — correct even when
+ * youColor is still being derived (resume edge, R9).
  */
-export function isAiThinking(
-  game: GameState,
-  aiPlayer: GamePlayer | null,
-  youColor: Color | null,
-  over: boolean,
-): boolean {
-  if (!aiPlayer?.isAI || over || game.status !== 'playing') return false
-  return youColor !== null && game.turn !== youColor
+export function isAiThinking(game: GameState, over: boolean): boolean {
+  if (over || game.status !== 'playing') return false
+  return aiSeatColor(game) === game.turn
 }
