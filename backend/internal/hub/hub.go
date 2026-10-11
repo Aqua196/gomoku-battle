@@ -238,8 +238,8 @@ func (h *Hub) roomListMsgLocked() *protocol.RoomListMsg {
 // immediately (zero: the synchronous path tests rely on).
 func (h *Hub) broadcastRoomList() {
 	h.mu.Lock()
-	h.rlDirty = true
 	if h.cfg.RoomListFlush > 0 {
+		h.rlDirty = true // only the flush path consumes this flag (R10)
 		h.mu.Unlock()
 		return
 	}
