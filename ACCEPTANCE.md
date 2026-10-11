@@ -35,10 +35,10 @@
 
 | 范围 | 证据 | 状态 |
 |---|---|---|
-| loadtest：N 并发连接+房间，连接耗时、广播延迟 P50/95/99、CPU/内存 | `cmd/loadtest` | ☐ |
-| 200/500/1000 三档真实运行 | `docs/evidence/bench-*.txt` | ☐ |
-| pprof 定位 ≥1 真实瓶颈并优化（前后对比） | `docs/evidence/pprof-*` | ☐ |
-| BENCHMARK.md（环境/方法/数据/分析，可复现命令） | — | ☐ |
+| loadtest：N 并发连接+房间，连接耗时、广播延迟 P50/95/99、CPU/内存 | `cmd/loadtest`（lastMove 匹配法；/proc CPU+RSS；/metrics 轮询；JSON+文件输出）+ `docs/evidence/bench-sanity-20r.json`（架构侧复跑） | ✅ |
+| 200/500/1000 三档真实运行 | `docs/evidence/bench-{200,500-before,500-after,1000}.txt`：200 房 p50 0.23/p95 2.2/p99 9.5ms；500 房优化后 1.01/71/943ms；1000 房 9.1/1189/3003ms 未塌（1999/2000 conns，945 moves/s） | ✅ |
+| pprof 定位 ≥1 真实瓶颈并优化（前后对比） | `docs/evidence/pprof-{before,after}-*`：`broadcastRoomList` 42.9% CPU + 2.0GB marshal/30s → RoomListFlush 50ms 事件合并，500 房 p50 −98%/p95 −82%/avg −72%（p99 尾部转 socket 写阻塞，如实记录） | ✅ |
+| BENCHMARK.md（环境/方法/数据/分析，可复现命令） | 见仓库根 `BENCHMARK.md` | ✅ |
 
 ## M4 工程化与交付
 
