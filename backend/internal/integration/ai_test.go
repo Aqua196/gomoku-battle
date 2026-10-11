@@ -1,0 +1,184 @@
+package integration
+
+import (
+	"testing"
+	"time"
+
+	"github.com/Aqua196/gomoku-battle/backend/internal/protocol"
+)
+
+// aiCfg keeps AI moves fast but leaves the human's turn timer generous so
+// slow AI thinking can't forfeit the game.
+func aiCfg(think time.Duration) protocol.Config {
+	cfg := fastCfg()
+	cfg.MoveTimeout = 10 * time.Second
+	cfg.ReconnectWindow = 10 * time.Second
+	cfg.AIThink = think
+	return cfg
+}
+
+// TestPlayAIFlow: play_ai creates an isAI game where the human is black;
+// after the human moves, the AI replies through the same actor path.
+func TestPlayAIFlow(t *testing.T) {
+	ts, _ := newTestServer(t, aiCfg(80*time.Millisecond))
+	a := dial(t, ts)
+	defer a.Close()
+	hello(t, a, "alice")
+
+	if err := a.SendMap(map[string]any{"type": "play_ai", "difficulty": "normal"}); err != nil {
+		t.Fatal(err)
+	}
+	gs, err := a.WaitType("game_start", 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gs["youColor"] != "black" {
+		t.Fatalf("youColor = %v", gs["youColor"])
+	}
+	g := gs["game"].(map[string]any)
+	white := g["players"].(map[string]any)["white"].(map[string]any)
+	if white["isAI"] != true || white["connected"] != true {
+		t.Fatalf("bad AI seat: %v", white)
+	}
+
+	// Human plays center; AI must answer inside its think budget.
+	if err := a.SendMap(map[string]any{"type": "move", "x": 7, "y": 7}); err != nil {
+		t.Fatal(err)
+	}
+	st, err := a.WaitType("game_state", 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gg := st["game"].(map[string]any)
+	if gg["turn"] != "white" || gg["moveNumber"].(float64) != 1 {
+		t.Fatalf("after human move: %v", gg)
+	}
+	st, err = a.WaitType("game_state", 3*time.Second)
+	if err != nil {
+		t.Fatalf("AI did not move: %v", err)
+	}
+	gg = st["game"].(map[string]any)
+	if gg["turn"] != "black" || gg["moveNumber"].(float64) != 2 {
+		t.Fatalf("after AI move: %v", gg)
+	}
+	lm := gg["lastMove"].(map[string]any)
+	if _, ok := lm["x"].(float64); !ok {
+		t.Fatalf("AI lastMove malformed: %v", lm)
+	}
+}
+
+func TestPlayAIInvalidDifficulty(t *testing.T) {
+	ts, _ := newTestServer(t, aiCfg(0))
+	a := dial(t, ts)
+	defer a.Close()
+	hello(t, a, "alice")
+	if err := a.SendMap(map[string]any{"type": "play_ai", "difficulty": "impossible"}); err != nil {
+		t.Fatal(err)
+	}
+	expectErr(t, a, protocol.EInvalidDifficulty)
+}
+
+// TestPlayAIWhileInRoom: play_ai is rejected while already in a game.
+func TestPlayAIWhileInRoom(t *testing.T) {
+	ts, _ := newTestServer(t, aiCfg(50*time.Millisecond))
+	a := dial(t, ts)
+	defer a.Close()
+	hello(t, a, "alice")
+	if err := a.SendMap(map[string]any{"type": "play_ai", "difficulty": "easy"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.WaitType("game_start", 2*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.SendMap(map[string]any{"type": "play_ai", "difficulty": "hard"}); err != nil {
+		t.Fatal(err)
+	}
+	expectErr(t, a, protocol.EAlreadyInRoom)
+}
+
+// TestAINonBlocking: while the AI is thinking (budget ~1.2s), other clients
+// matchmake and move without any slowdown.
+func TestAINonBlocking(t *testing.T) {
+	ts, _ := newTestServer(t, aiCfg(1200*time.Millisecond))
+	a := dial(t, ts)
+	defer a.Close()
+	hello(t, a, "alice")
+	if err := a.SendMap(map[string]any{"type": "play_ai", "difficulty": "hard"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.WaitType("game_start", 2*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.SendMap(map[string]any{"type": "move", "x": 7, "y": 7}); err != nil {
+		t.Fatal(err)
+	}
+	// AI now thinks for up to ~1.2s.
+
+	start := time.Now()
+	b, c := dial(t, ts), dial(t, ts)
+	defer b.Close()
+	defer c.Close()
+	hello(t, b, "bob")
+	hello(t, c, "carol")
+	if err := b.SendMap(map[string]any{"type": "matchmake"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.WaitType("matchmaking", time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SendMap(map[string]any{"type": "matchmake"}); err != nil {
+		t.Fatal(err)
+	}
+	gb, err := b.WaitType("game_start", 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.WaitType("game_start", 2*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if gb["youColor"] == "black" {
+		if err := b.SendMap(map[string]any{"type": "move", "x": 5, "y": 5}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.WaitType("game_state", 2*time.Second); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if el := time.Since(start); el > 1200*time.Millisecond {
+		t.Fatalf("hub blocked by AI thinking for %v", el)
+	}
+}
+
+// TestAIResign: resigning vs AI ends the game and returns the human to
+// lobby (room gone, AI driver exits via actor done).
+func TestAIResign(t *testing.T) {
+	ts, h := newTestServer(t, aiCfg(60*time.Millisecond))
+	a := dial(t, ts)
+	defer a.Close()
+	hello(t, a, "alice")
+	if err := a.SendMap(map[string]any{"type": "play_ai", "difficulty": "easy"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.WaitType("game_start", 2*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.SendMap(map[string]any{"type": "resign"}); err != nil {
+		t.Fatal(err)
+	}
+	over, err := a.WaitType("game_over", 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if over["reason"] != "resign" || over["winner"] != "white" {
+		t.Fatalf("bad game_over: %v", over)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		m := h.Metrics()
+		if m.GamesPlayed == 1 && m.ActiveGames == 0 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("metrics after AI resign: %+v", h.Metrics())
+}

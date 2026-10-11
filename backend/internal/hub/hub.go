@@ -52,6 +52,9 @@ type Player struct {
 	// disconnectedAt marks when the conn was lost (zero while connected);
 	// drives the session TTL sweep for non-playing sessions (REVIEW R4).
 	disconnectedAt time.Time
+	// isAI marks the pseudo-player seated in an isAI room: it never holds
+	// a conn, never enters h.players, and renders as connected.
+	isAI bool
 }
 
 // ID returns the player id.
@@ -252,7 +255,7 @@ func protoRoomLocked(e *roomEntry) protocol.Room {
 			PlayerID:  p.ID(),
 			Nick:      p.Nick(),
 			Color:     protocol.StrPtr(colors[i]),
-			Connected: p.conn != nil,
+			Connected: p.conn != nil || p.isAI,
 		})
 	}
 	return protocol.Room{

@@ -4,6 +4,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/Aqua196/gomoku-battle/backend/internal/ai"
 	"github.com/Aqua196/gomoku-battle/backend/internal/game"
 	"github.com/Aqua196/gomoku-battle/backend/internal/protocol"
 	"github.com/Aqua196/gomoku-battle/backend/internal/store"
@@ -286,21 +287,41 @@ func (h *Hub) MatchmakeCancel(p *Player) {
 	h.reply(p, protocol.NewMatchmaking(protocol.MatchCancelled, 0))
 }
 
-// PlayAI is M2 scope; M1 answers not_implemented for valid difficulties and
-// invalid_difficulty otherwise (PROTOCOL §2/§8).
+// PlayAI seats the caller as black against an embedded AI at the given
+// difficulty, in an isAI room (PROTOCOL §2). The AI is a pseudo-player: it
+// holds no conn and posts its moves through the same actor mailbox.
 func (h *Hub) PlayAI(p *Player, difficulty string) {
 	switch difficulty {
 	case "easy", "normal", "hard":
-		h.mu.Lock()
-		dequeued := h.dequeueLocked(p)
-		h.mu.Unlock()
-		if dequeued {
-			h.reply(p, protocol.NewMatchmaking(protocol.MatchCancelled, 0))
-		}
-		h.replyErr(p, protocol.ENotImplemented, "AI opponents arrive in M2")
 	default:
 		h.replyErr(p, protocol.EInvalidDifficulty, "difficulty must be easy|normal|hard")
+		return
 	}
+	var actor *game.Actor
+	h.mu.Lock()
+	if p.roomID != "" {
+		h.mu.Unlock()
+		h.replyErr(p, protocol.EAlreadyInRoom, "finish your current game first")
+		return
+	}
+	dequeued := h.dequeueLocked(p)
+	e := h.newRoomLocked(p.Nick()+" vs AI ("+difficulty+")", true)
+	e.seats[0] = p
+	e.seats[1] = &Player{
+		rec:  &store.PlayerRecord{PlayerID: randID("ai", 8), Nick: "AI (" + difficulty + ")"},
+		isAI: true,
+	}
+	p.roomID = e.meta.ID
+	actor = h.startGameLocked(e)
+	actor.SetObserver(ai.NewDriver(actor, actor.Done(), e.seats[1].ID(),
+		protocol.ColorWhite, difficulty, h.cfg.AIThink).Notify)
+	h.mu.Unlock()
+
+	if dequeued {
+		h.reply(p, protocol.NewMatchmaking(protocol.MatchCancelled, 0))
+	}
+	h.broadcastRoomList()
+	actor.Start()
 }
 
 // Resign forfeits the caller's live game.
@@ -373,7 +394,7 @@ func (h *Hub) startGameLocked(e *roomEntry) *game.Actor {
 	}
 	seatOf := func(i int) game.Seat {
 		p := e.seats[i]
-		return game.Seat{PlayerID: p.ID(), Nick: p.Nick(), Connected: true}
+		return game.Seat{PlayerID: p.ID(), Nick: p.Nick(), Connected: true, IsAI: p.isAI}
 	}
 	e.actor = game.New(e.meta.ID, seatOf(0), seatOf(1), h.cfg, h.sendToPlayer, h.gameOver)
 	return e.actor

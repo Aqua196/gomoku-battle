@@ -482,22 +482,8 @@ func TestMatchmakeRequiresLobby(t *testing.T) {
 	expectErr(t, a, protocol.EAlreadyInRoom)
 }
 
-func TestPlayAINotImplemented(t *testing.T) {
-	ts, _ := newTestServer(t, fastCfg())
-	c := dial(t, ts)
-	defer c.Close()
-	hello(t, c, "alice")
-
-	if err := c.SendMap(map[string]any{"type": "play_ai", "difficulty": "easy"}); err != nil {
-		t.Fatal(err)
-	}
-	expectErr(t, c, protocol.ENotImplemented)
-
-	if err := c.SendMap(map[string]any{"type": "play_ai", "difficulty": "impossible"}); err != nil {
-		t.Fatal(err)
-	}
-	expectErr(t, c, protocol.EInvalidDifficulty)
-}
+// M2: play_ai is implemented; the not_implemented path no longer exists.
+// Difficulty validation is covered by TestPlayAIInvalidDifficulty.
 
 // ------------------------------------------------------------------ game
 
