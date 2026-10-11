@@ -1,0 +1,120 @@
+{
+  "client_cpu_s": 0.55,
+  "client_rss_mb": 15,
+  "connect_ms": {
+    "p50": 0.249125,
+    "p95": 0.477189,
+    "p99": 1.968357
+  },
+  "conns_dialed": 40,
+  "duration_s": 11.352919714,
+  "errors": {
+    "illegal_move": 394,
+    "not_your_turn": 7,
+    "read_room_created": 17
+  },
+  "games_finished": 23,
+  "games_started": 23,
+  "hellos": 40,
+  "mode": "pvp",
+  "move_latency_ms": {
+    "avg": 0.3216676300211419,
+    "max": 3.401679,
+    "p50": 0.329788,
+    "p95": 0.534107,
+    "p99": 0.811922
+  },
+  "moves_per_s": 124.98987359614124,
+  "moves_total": 1419,
+  "rooms": 20,
+  "server_samples": [
+    {
+      "at": "2026-10-11T21:37:05.401861921Z",
+      "connections": 40,
+      "lobbyPlayers": 0,
+      "rooms": 20,
+      "activeGames": 20,
+      "gamesPlayed": 0
+    },
+    {
+      "at": "2026-10-11T21:37:06.401792182Z",
+      "connections": 40,
+      "lobbyPlayers": 2,
+      "rooms": 20,
+      "activeGames": 19,
+      "gamesPlayed": 1
+    },
+    {
+      "at": "2026-10-11T21:37:07.401007363Z",
+      "connections": 40,
+      "lobbyPlayers": 6,
+      "rooms": 20,
+      "activeGames": 17,
+      "gamesPlayed": 3
+    },
+    {
+      "at": "2026-10-11T21:37:08.40156583Z",
+      "connections": 40,
+      "lobbyPlayers": 12,
+      "rooms": 20,
+      "activeGames": 14,
+      "gamesPlayed": 8
+    },
+    {
+      "at": "2026-10-11T21:37:09.401536399Z",
+      "connections": 40,
+      "lobbyPlayers": 12,
+      "rooms": 20,
+      "activeGames": 14,
+      "gamesPlayed": 9
+    },
+    {
+      "at": "2026-10-11T21:37:10.401576271Z",
+      "connections": 40,
+      "lobbyPlayers": 16,
+      "rooms": 20,
+      "activeGames": 12,
+      "gamesPlayed": 11
+    },
+    {
+      "at": "2026-10-11T21:37:11.404120698Z",
+      "connections": 40,
+      "lobbyPlayers": 20,
+      "rooms": 20,
+      "activeGames": 10,
+      "gamesPlayed": 13
+    },
+    {
+      "at": "2026-10-11T21:37:12.402876677Z",
+      "connections": 40,
+      "lobbyPlayers": 20,
+      "rooms": 20,
+      "activeGames": 10,
+      "gamesPlayed": 13
+    },
+    {
+      "at": "2026-10-11T21:37:13.404527436Z",
+      "connections": 40,
+      "lobbyPlayers": 20,
+      "rooms": 20,
+      "activeGames": 10,
+      "gamesPlayed": 13
+    },
+    {
+      "at": "2026-10-11T21:37:14.401992643Z",
+      "connections": 34,
+      "lobbyPlayers": 20,
+      "rooms": 20,
+      "activeGames": 10,
+      "gamesPlayed": 13
+    },
+    {
+      "at": "2026-10-11T21:37:15.402576449Z",
+      "connections": 34,
+      "lobbyPlayers": 20,
+      "rooms": 20,
+      "activeGames": 10,
+      "gamesPlayed": 13
+    }
+  ]
+}
