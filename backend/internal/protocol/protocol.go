@@ -98,6 +98,15 @@ type Config struct {
 	MoveTimeout     time.Duration // per-turn move deadline
 	ReconnectWindow time.Duration // disconnect-forfeit window
 	SendBuf         int           // per-connection outbound buffer (msgs)
+	// SessionTTL expires disconnected, non-playing sessions (REVIEW R4).
+	// Playing sessions are exempt: their lifecycle belongs to the game.
+	SessionTTL time.Duration
+	// SweepInterval is how often the hub scans for expired sessions.
+	SweepInterval time.Duration
+	// AbandonTTL cleans up a game in which BOTH sides stayed offline past
+	// their reconnect windows (PROTOCOL §5: verdict suspended until a
+	// reconnect; abandoned games die on this TTL).
+	AbandonTTL time.Duration
 }
 
 // DefaultConfig returns the production constants from PROTOCOL §6.
@@ -110,6 +119,9 @@ func DefaultConfig() Config {
 		MoveTimeout:     30 * time.Second,
 		ReconnectWindow: 30 * time.Second,
 		SendBuf:         64,
+		SessionTTL:      5 * time.Minute,
+		SweepInterval:   60 * time.Second,
+		AbandonTTL:      10 * time.Minute,
 	}
 }
 
