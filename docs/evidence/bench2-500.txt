@@ -1,0 +1,514 @@
+{
+  "client_cpu_s": 129.56,
+  "client_rss_mb": 144,
+  "connect_hello_ms": {
+    "p50": 0.286188,
+    "p95": 0.829261,
+    "p99": 4.097835
+  },
+  "conns_dialed": 1000,
+  "duration_s": 60.007989222,
+  "errors": {
+    "already_in_room": 1667,
+    "not_in_room": 509
+  },
+  "games_finished": 3072,
+  "games_started": 6008,
+  "hellos": 1000,
+  "loaded_window_s": 59.003751224,
+  "mode": "pvp",
+  "move_latency_ms": {
+    "avg": 0.4107675276686621,
+    "count": 577332,
+    "max": 20.541171,
+    "p50": 0.241798,
+    "p95": 1.116154,
+    "p99": 3.81857
+  },
+  "moves_accepted": 577332,
+  "moves_per_s": 9784.66602586393,
+  "moves_sent": 580409,
+  "rooms": 500,
+  "server_samples": [
+    {
+      "at": "2026-10-11T22:38:07.84758463Z",
+      "connections": 366,
+      "lobbyPlayers": 0,
+      "rooms": 183,
+      "activeGames": 183,
+      "gamesPlayed": 13753
+    },
+    {
+      "at": "2026-10-11T22:38:08.846956804Z",
+      "connections": 740,
+      "lobbyPlayers": 0,
+      "rooms": 370,
+      "activeGames": 370,
+      "gamesPlayed": 13753
+    },
+    {
+      "at": "2026-10-11T22:38:09.847848667Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 13755
+    },
+    {
+      "at": "2026-10-11T22:38:10.846940539Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 13765
+    },
+    {
+      "at": "2026-10-11T22:38:11.847805478Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 13802
+    },
+    {
+      "at": "2026-10-11T22:38:12.846888635Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 13924
+    },
+    {
+      "at": "2026-10-11T22:38:13.847177885Z",
+      "connections": 1000,
+      "lobbyPlayers": 4,
+      "rooms": 498,
+      "activeGames": 498,
+      "gamesPlayed": 14092
+    },
+    {
+      "at": "2026-10-11T22:38:14.846799933Z",
+      "connections": 1000,
+      "lobbyPlayers": 4,
+      "rooms": 498,
+      "activeGames": 498,
+      "gamesPlayed": 14229
+    },
+    {
+      "at": "2026-10-11T22:38:15.847108725Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 14283
+    },
+    {
+      "at": "2026-10-11T22:38:16.847374385Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 14324
+    },
+    {
+      "at": "2026-10-11T22:38:17.847725426Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 14417
+    },
+    {
+      "at": "2026-10-11T22:38:18.846740184Z",
+      "connections": 1000,
+      "lobbyPlayers": 4,
+      "rooms": 498,
+      "activeGames": 498,
+      "gamesPlayed": 14548
+    },
+    {
+      "at": "2026-10-11T22:38:19.847746873Z",
+      "connections": 1000,
+      "lobbyPlayers": 2,
+      "rooms": 499,
+      "activeGames": 499,
+      "gamesPlayed": 14671
+    },
+    {
+      "at": "2026-10-11T22:38:20.847582148Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 14779
+    },
+    {
+      "at": "2026-10-11T22:38:21.847524387Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 14837
+    },
+    {
+      "at": "2026-10-11T22:38:22.846762683Z",
+      "connections": 1000,
+      "lobbyPlayers": 4,
+      "rooms": 498,
+      "activeGames": 498,
+      "gamesPlayed": 14929
+    },
+    {
+      "at": "2026-10-11T22:38:23.847415489Z",
+      "connections": 1000,
+      "lobbyPlayers": 4,
+      "rooms": 498,
+      "activeGames": 498,
+      "gamesPlayed": 15045
+    },
+    {
+      "at": "2026-10-11T22:38:24.846861531Z",
+      "connections": 1000,
+      "lobbyPlayers": 10,
+      "rooms": 495,
+      "activeGames": 495,
+      "gamesPlayed": 15161
+    },
+    {
+      "at": "2026-10-11T22:38:25.846813297Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 15266
+    },
+    {
+      "at": "2026-10-11T22:38:26.84675713Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 15342
+    },
+    {
+      "at": "2026-10-11T22:38:27.846804478Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 15429
+    },
+    {
+      "at": "2026-10-11T22:38:28.846855243Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 15521
+    },
+    {
+      "at": "2026-10-11T22:38:29.846783702Z",
+      "connections": 1000,
+      "lobbyPlayers": 2,
+      "rooms": 499,
+      "activeGames": 499,
+      "gamesPlayed": 15642
+    },
+    {
+      "at": "2026-10-11T22:38:30.847502572Z",
+      "connections": 1000,
+      "lobbyPlayers": 2,
+      "rooms": 499,
+      "activeGames": 499,
+      "gamesPlayed": 15747
+    },
+    {
+      "at": "2026-10-11T22:38:31.846805105Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 15834
+    },
+    {
+      "at": "2026-10-11T22:38:32.847110386Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 15924
+    },
+    {
+      "at": "2026-10-11T22:38:33.847437794Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 16028
+    },
+    {
+      "at": "2026-10-11T22:38:34.846897516Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 16116
+    },
+    {
+      "at": "2026-10-11T22:38:35.847671839Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 16238
+    },
+    {
+      "at": "2026-10-11T22:38:36.847418673Z",
+      "connections": 1000,
+      "lobbyPlayers": 2,
+      "rooms": 499,
+      "activeGames": 499,
+      "gamesPlayed": 16340
+    },
+    {
+      "at": "2026-10-11T22:38:37.846729936Z",
+      "connections": 1000,
+      "lobbyPlayers": 2,
+      "rooms": 499,
+      "activeGames": 499,
+      "gamesPlayed": 16422
+    },
+    {
+      "at": "2026-10-11T22:38:38.847422775Z",
+      "connections": 1000,
+      "lobbyPlayers": 2,
+      "rooms": 499,
+      "activeGames": 499,
+      "gamesPlayed": 16515
+    },
+    {
+      "at": "2026-10-11T22:38:39.847307886Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 16605
+    },
+    {
+      "at": "2026-10-11T22:38:40.84676733Z",
+      "connections": 1000,
+      "lobbyPlayers": 2,
+      "rooms": 499,
+      "activeGames": 499,
+      "gamesPlayed": 16725
+    },
+    {
+      "at": "2026-10-11T22:38:41.846790809Z",
+      "connections": 1000,
+      "lobbyPlayers": 2,
+      "rooms": 499,
+      "activeGames": 499,
+      "gamesPlayed": 16824
+    },
+    {
+      "at": "2026-10-11T22:38:42.846729484Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 16918
+    },
+    {
+      "at": "2026-10-11T22:38:43.846801044Z",
+      "connections": 1000,
+      "lobbyPlayers": 8,
+      "rooms": 496,
+      "activeGames": 496,
+      "gamesPlayed": 17000
+    },
+    {
+      "at": "2026-10-11T22:38:44.846730335Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 17102
+    },
+    {
+      "at": "2026-10-11T22:38:45.847050445Z",
+      "connections": 1000,
+      "lobbyPlayers": 4,
+      "rooms": 498,
+      "activeGames": 498,
+      "gamesPlayed": 17201
+    },
+    {
+      "at": "2026-10-11T22:38:46.846777802Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 17309
+    },
+    {
+      "at": "2026-10-11T22:38:47.847326595Z",
+      "connections": 1000,
+      "lobbyPlayers": 4,
+      "rooms": 499,
+      "activeGames": 498,
+      "gamesPlayed": 17400
+    },
+    {
+      "at": "2026-10-11T22:38:48.846809507Z",
+      "connections": 1000,
+      "lobbyPlayers": 2,
+      "rooms": 499,
+      "activeGames": 499,
+      "gamesPlayed": 17482
+    },
+    {
+      "at": "2026-10-11T22:38:49.84730689Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 17588
+    },
+    {
+      "at": "2026-10-11T22:38:50.846803535Z",
+      "connections": 1000,
+      "lobbyPlayers": 2,
+      "rooms": 499,
+      "activeGames": 499,
+      "gamesPlayed": 17690
+    },
+    {
+      "at": "2026-10-11T22:38:51.847026502Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 17786
+    },
+    {
+      "at": "2026-10-11T22:38:52.846820951Z",
+      "connections": 1000,
+      "lobbyPlayers": 2,
+      "rooms": 499,
+      "activeGames": 499,
+      "gamesPlayed": 17887
+    },
+    {
+      "at": "2026-10-11T22:38:53.846761302Z",
+      "connections": 1000,
+      "lobbyPlayers": 2,
+      "rooms": 499,
+      "activeGames": 499,
+      "gamesPlayed": 17985
+    },
+    {
+      "at": "2026-10-11T22:38:54.846776754Z",
+      "connections": 1000,
+      "lobbyPlayers": 2,
+      "rooms": 499,
+      "activeGames": 499,
+      "gamesPlayed": 18082
+    },
+    {
+      "at": "2026-10-11T22:38:55.847663099Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 18181
+    },
+    {
+      "at": "2026-10-11T22:38:56.847278408Z",
+      "connections": 1000,
+      "lobbyPlayers": 2,
+      "rooms": 499,
+      "activeGames": 499,
+      "gamesPlayed": 18279
+    },
+    {
+      "at": "2026-10-11T22:38:57.846775039Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 18381
+    },
+    {
+      "at": "2026-10-11T22:38:58.846753995Z",
+      "connections": 1000,
+      "lobbyPlayers": 4,
+      "rooms": 498,
+      "activeGames": 498,
+      "gamesPlayed": 18480
+    },
+    {
+      "at": "2026-10-11T22:38:59.847143713Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 18574
+    },
+    {
+      "at": "2026-10-11T22:39:00.846764761Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 18675
+    },
+    {
+      "at": "2026-10-11T22:39:01.846944877Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 18780
+    },
+    {
+      "at": "2026-10-11T22:39:02.846977581Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 18872
+    },
+    {
+      "at": "2026-10-11T22:39:03.846825794Z",
+      "connections": 1000,
+      "lobbyPlayers": 4,
+      "rooms": 498,
+      "activeGames": 498,
+      "gamesPlayed": 18964
+    },
+    {
+      "at": "2026-10-11T22:39:04.846757287Z",
+      "connections": 1000,
+      "lobbyPlayers": 2,
+      "rooms": 499,
+      "activeGames": 499,
+      "gamesPlayed": 19066
+    },
+    {
+      "at": "2026-10-11T22:39:05.849738225Z",
+      "connections": 1000,
+      "lobbyPlayers": 0,
+      "rooms": 500,
+      "activeGames": 500,
+      "gamesPlayed": 19159
+    },
+    {
+      "at": "2026-10-11T22:39:06.851335851Z",
+      "connections": 930,
+      "lobbyPlayers": 52,
+      "rooms": 446,
+      "activeGames": 446,
+      "gamesPlayed": 19315
+    }
+  ]
+}
