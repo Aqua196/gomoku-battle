@@ -35,10 +35,11 @@
 
 | 范围 | 证据 | 状态 |
 |---|---|---|
-| loadtest：N 并发连接+房间，连接耗时、广播延迟 P50/95/99、CPU/内存 | `cmd/loadtest`（lastMove 匹配法；/proc CPU+RSS；/metrics 轮询；JSON+文件输出）+ `docs/evidence/bench-sanity-20r.json`（架构侧复跑） | ✅ |
-| 200/500/1000 三档真实运行 | `docs/evidence/bench-{200,500-before,500-after,1000}.txt`：200 房 p50 0.23/p95 2.2/p99 9.5ms；500 房优化后 1.01/71/943ms；1000 房 9.1/1189/3003ms 未塌（1999/2000 conns，945 moves/s） | ✅ |
-| pprof 定位 ≥1 真实瓶颈并优化（前后对比） | `docs/evidence/pprof-{before,after}-*`：`broadcastRoomList` 42.9% CPU + 2.0GB marshal/30s → RoomListFlush 50ms 事件合并，500 房 p50 −98%/p95 −82%/avg −72%（p99 尾部转 socket 写阻塞，如实记录） | ✅ |
-| BENCHMARK.md（环境/方法/数据/分析，可复现命令） | 见仓库根 `BENCHMARK.md` | ✅ |
+| loadtest：N 并发连接+房间，连接耗时、广播延迟 P50/95/99、CPU/内存 | `cmd/loadtest`（lastMove+turn 校验；sent/accepted 分列；蓄水池采样；/proc CPU+RSS；/metrics 轮询）+ `docs/evidence/bench2-sanity-30r.txt`（架构侧复跑） | ✅ |
+| 200/500/1000 三档真实运行 | `docs/evidence/bench2-{200,500,1000}.txt`（修正后真实 60s 满载）：200 房 p50 0.22/p95 0.47/p99 1.82ms/3969 moves/s；500 房 0.24/1.12/3.82ms/9785；1000 房 0.42/8.67/20.76ms/18458 未塌（~2000 连接全活 60s，完局 5708） | ✅ |
+| pprof 定位 ≥1 真实瓶颈并优化（前后对比） | `docs/evidence/pprof-{before,after}-*`：`broadcastRoomList` 42.9% CPU + 2.0GB marshal/30s → RoomListFlush 50ms 事件合并广播；同档 p50 −98%/p95 −82%（修正后水位更低：0.24/1.12ms） | ✅ |
+| BENCHMARK.md（环境/方法/数据/分析，可复现命令） | 见仓库根 `BENCHMARK.md`（含数据修正声明：首版工具缺陷→修复→重跑，修正幅度如实披露） | ✅ |
+| 评审 | — | `docs/reviews/m3.md`：**14 条**（4 major/10 minor）全部修复——R1 连接 30s 批量死（suppressPong 误用）、R2 僵尸读协程偷帧、R3 接收判定 turn 校验、R4 幸存者偏差+口径、R5/R6/R9/R10/R11/R12/R14 全部落地并三档重跑 | ✅ |
 
 ## M4 工程化与交付
 
