@@ -223,11 +223,13 @@ func TestWSHelloValidation(t *testing.T) {
 	}
 	expectErr(t, bad, protocol.EBadRequest)
 
-	// Empty nick -> bad_request.
-	if err := bad.SendMap(map[string]any{"type": "hello", "nick": ""}); err != nil {
-		t.Fatal(err)
+	// Empty / whitespace nick -> invalid_nick.
+	for _, nick := range []string{"", "   "} {
+		if err := bad.SendMap(map[string]any{"type": "hello", "nick": nick}); err != nil {
+			t.Fatal(err)
+		}
+		expectErr(t, bad, protocol.EInvalidNick)
 	}
-	expectErr(t, bad, protocol.EBadRequest)
 
 	// A proper hello still succeeds afterwards on the first client.
 	if w := hello(t, c, "carol"); w["type"] != "welcome" {

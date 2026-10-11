@@ -184,7 +184,7 @@ func TestAbandonedGameRetired(t *testing.T) {
 	a.Disconnect(white)
 	waitOver(t, cap)
 	over := cap.last(black, "game_over")
-	if over == nil || over["reason"] != "disconnect_timeout" {
+	if over == nil || over["reason"] != "abandoned" {
 		t.Fatalf("bad abandon game_over: %v", over)
 	}
 	if w := over["winner"]; w != nil {
@@ -211,4 +211,58 @@ func TestActorPanicStillCallsOnOver(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("done not closed after panic")
 	}
+}
+
+// R2/R15 presence regression: A drops, B drops, A returns, B returns — the
+// second returner must be told the opponent is back (connected:true), and
+// the first returner must have been told the opponent is still offline.
+func TestDoubleReconnectPresenceToReturner(t *testing.T) {
+	cfg := testCfg()
+	cfg.ReconnectWindow = 400 * time.Millisecond
+	a, cap, black, white := startTestActor(t, cfg)
+
+	a.Disconnect(black)
+	a.Disconnect(white)
+	a.Reconnect(black)
+
+	deadline := time.Now().Add(2 * time.Second)
+	var presA map[string]any
+	for time.Now().Before(deadline) {
+		cap.mu.Lock()
+		for _, m := range cap.frames[black] {
+			if m["type"] == "opponent_presence" {
+				presA = m
+			}
+		}
+		cap.mu.Unlock()
+		if presA != nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if presA == nil || presA["connected"] != false {
+		t.Fatalf("A (first returner) should see opponent offline, got %v", presA)
+	}
+
+	a.Reconnect(white)
+	deadline = time.Now().Add(2 * time.Second)
+	var presB map[string]any
+	for time.Now().Before(deadline) {
+		cap.mu.Lock()
+		for _, m := range cap.frames[white] {
+			if m["type"] == "opponent_presence" {
+				presB = m
+			}
+		}
+		cap.mu.Unlock()
+		if presB != nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if presB == nil || presB["connected"] != true {
+		t.Fatalf("B (second returner) must see opponent online, got %v", presB)
+	}
+	a.Resign(white)
+	waitOver(t, cap)
 }

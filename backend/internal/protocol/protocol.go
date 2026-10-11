@@ -52,8 +52,10 @@ const (
 
 // Error codes (PROTOCOL §8).
 const (
-	EBadRequest        = "bad_request"
-	EHelloTimeout      = "hello_timeout"
+	EBadRequest   = "bad_request"
+	EHelloTimeout = "hello_timeout"
+	// EUnauthorized survives only for pre-hello rejection; hello token
+	// takeover (PROTOCOL §1) no longer emits it.
 	EUnauthorized      = "unauthorized"
 	ENotInLobby        = "not_in_lobby"
 	EAlreadyInRoom     = "already_in_room"
@@ -64,6 +66,7 @@ const (
 	EIllegalMove       = "illegal_move"
 	EGameOver          = "game_over"
 	EInvalidDifficulty = "invalid_difficulty"
+	EInvalidNick       = "invalid_nick"
 	ENotImplemented    = "not_implemented"
 	EInternal          = "internal"
 )
@@ -86,6 +89,9 @@ const (
 	ReasonTimeout           = "timeout"
 	ReasonResign            = "resign"
 	ReasonDisconnectTimeout = "disconnect_timeout"
+	// ReasonAbandoned retires a game both sides abandoned past AbandonTTL
+	// (PROTOCOL §3: winner is null, like draw).
+	ReasonAbandoned = "abandoned"
 )
 
 // Config carries the PROTOCOL §6 time constants. They are injected so tests
