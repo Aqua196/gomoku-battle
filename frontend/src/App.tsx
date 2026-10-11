@@ -5,7 +5,7 @@ import { Lobby } from './pages/Lobby'
 import { StoreProvider, useStore } from './state/store'
 
 const ERROR_LABEL: Record<string, string> = {
-  not_implemented: '人机对战将在 M2 开放，敬请期待',
+  not_implemented: '该功能暂未实现',
   not_your_turn: '还没轮到你',
   illegal_move: '非法落子',
   already_in_room: '你已在房间中',

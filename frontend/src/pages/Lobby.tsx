@@ -1,13 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../state/store'
-import type { Difficulty, Room } from '../ws/protocol'
+import { DIFFICULTIES } from '../state/ai'
+import type { Room } from '../ws/protocol'
 import { ConnBadge } from '../components/ConnBadge'
-
-const DIFFICULTIES: { id: Difficulty; label: string }[] = [
-  { id: 'easy', label: '简单' },
-  { id: 'normal', label: '普通' },
-  { id: 'hard', label: '困难' },
-]
 
 export function Lobby() {
   const { state, api } = useStore()
