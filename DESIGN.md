@@ -71,3 +71,10 @@
 - 服务端权威：客户端只做展示与输入，杜绝信任边界问题。
 - token 会话恢复：重连实现只依赖内存会话表，天然可测；M4 换 Redis 即获得跨重启恢复。
 - AI 走同一 actor mailbox（M2）：AI = 一个内嵌“假客户端”，不引入第二条协议路径。
+
+## 6. M1 评审后加固（docs/reviews/m1.md → 修复）
+
+- **会话生命周期**：hello{token} 命中在线会话 = takeover（关旧绑新）；断线会话 TTL 淘汰（非对局短 TTL + 定期扫描，对局中会话豁免）；服务端重启/token 失效时客户端经 welcome 清理自身视图。
+- **广播背压**：room_list 在连接层脏位合并，只投递最新一份，防止 churn 踢出正常客户端。
+- **actor 韧性**：run() defer recover + 无条件 onOver 回收房间与玩家；timer 命中先排空 mailbox 再裁决（先到先生效）；双方同断时判负挂起，重连方到场再结算。
+- **时钟同步**：welcome/game_state 携带 serverNow，前端用 EMA 估算 offset 渲染倒计时。
