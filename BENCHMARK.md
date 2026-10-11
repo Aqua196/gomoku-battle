@@ -1,67 +1,78 @@
 # BENCHMARK — M3 压测报告
 
-> 所有数字均来自真实运行；原始输出存档 `docs/evidence/`（JSON 全量 + pprof 文本）。复现命令见末节。
+> 所有数字均来自真实运行；原始输出存档 `docs/evidence/`。复现命令见末节。
+>
+> **数据修正声明（评审驱动）**：第一版数据由有缺陷的压测工具产出（连接 hello+30s 被踢死、僵尸读协程抢帧、接收判定过宽、幸存者偏差），独立评审 M3-R1~R4 实锤后工具已修复并**重跑全部档位**。本表以 `bench2-*` 修正数据为准；旧 `bench-*` 文件保留作对照，修正幅度见 §3.2。
 
 ## 1. 测试环境
 
 | 项 | 值 |
 |---|---|
-| 机器 | 云虚拟机，8 vCPU / 31GB RAM（单机同跑 server + loadtest + 浏览器） |
+| 机器 | 云虚拟机，8 vCPU / 31GB RAM（单机同跑 server + loadtest） |
 | Go | 1.27.2 linux/amd64 |
-| 服务端 | `PPROF=1 PORT=8080 ./gserver`（内存 Store，RoomListFlush=50ms 为优化后默认） |
-| 客户端 | `backend/cmd/loadtest`：真实 WS 连接、create/join 确定性配对（pvp），抖动落子间隔，lastMove 匹配法测广播延迟（发 move → 收到含该手的 game_state） |
+| 服务端 | `PPROF=1 PORT=8080 ./gserver`（内存 Store，RoomListFlush=50ms 优化后默认） |
+| 客户端 | `backend/cmd/loadtest`：真实 WS 连接（正常 pong 心跳）、create/join 确定性配对（pvp），50ms 抖动落子间隔，延迟=发 move → 收到 `lastMove==(x,y)` 且 `turn` 翻转的 game_state；sent/accepted 分开计；吞吐按真实有载窗口；60s/档 |
 
-## 2. 结果总表（60s/档）
+## 2. 结果总表（修正后，bench2-*，60s/档）
 
-| 档位 | 连接 | 连接建立 p50/p95/p99 (ms) | 落子广播 p50 | p95 | p99 | max | moves/s | 完成局数 |
+| 档位 | 连接 | 端到端连接(dial+hello) p50/p95/p99 (ms) | 落子广播 p50 | p95 | p99 | max | moves/s | 开局/完局 |
 |---|---|---|---|---|---|---|---|---|
-| 200 房（优化后） | 400 | 0.23 / 2.2 / 9.5 | 0.23 | 2.2 | 9.5 | 36 | 267 | — |
-| 500 房 **优化前** | 1000 | — | **53.3** | **402.8** | 682.6 | 1518 | 658 | — |
-| 500 房 **优化后** | 1000 | — | **1.01** | **71.1** | 942.6 | 5312 | 718 | 591 |
-| 1000 房（优化后） | 1999/2000 | — | 9.1 | 1189 | 3003 | 6506 | 945 | — |
+| 200 房 | 400 | 0.44* / — / — | **0.22** | **0.47** | 1.82 | — | **3969** | 2432 / 1212 |
+| 500 房 | 1000 | — / — / — | **0.24** | **1.12** | 3.82 | — | **9785** | 6008 / 3072 |
+| 1000 房 | ~2000 | — / — / — | **0.42** | **8.67** | 20.76 | — | **18458** | 11327 / 5708 |
 
-- `docs/evidence/bench-{200,500-before,500-after,1000}.txt`、`bench-analysis.txt`
-- 1000 房档未塌点：1999/2000 连接拨通，吞吐 945 moves/s；尾部延迟劣化主要来自内核 socket IO（优化后 profile 顶部为 `Syscall6`）。
-- loadtest 端错误计数（illegal_move/not_your_turn）为压测节奏产物：配对双方同时尝试落子、或上一手已终局仍发子，服务端正确拒绝——属预期协议行为，非服务端缺陷。
+\* 精确 connect_hello 分位数见各 `bench2-*.txt`；30 房复验档实测 p50 0.46/p95 7.5/p99 11.7ms。
 
-## 3. 瓶颈定位（pprof 实测）
+- `docs/evidence/bench2-{200,500,1000}.txt`、`bench-analysis2.txt`、`bench2-sanity-30r.txt`
+- 1000 房档未塌点：~2000 连接全活满 60s，吞吐 18458 moves/s，完局 5708；p99 20.8ms 尾部为正常内核 socket 排队。
+- 完局口径：`games_finished` 仅计收到 `game_over` 的局；开局多于完局是 60s 截止时在局内未完的如实差值。
+- 错误计数全部披露（`bench-analysis2.txt`）：`already_in_room`/`not_in_room` 为 game_over 与座位释放间的合法竞态，harness 退避重试并逐次计数；`conn_dead` 本轮三档为 0。
 
-500 房持续窗口 30s CPU profile（`pprof-before-cpu-top.txt`）：
+## 3. 瓶颈定位与优化
 
-- `hub.broadcastRoomList` **420ms cum = 42.9%**：每次房间变动（create/join/finish，~10 事件/s）都在 `h.mu` 下 `protoRoomLocked` O(rooms) 重建全量列表 + `protocol.Marshal` + 逐个 lobby conn 写 socket → O(rooms×events) 渲染+序列化 + 写风暴。
-- heap `alloc_space` 印证：roomListMsgLocked 698MB、protoRoomLocked 224MB、JSON marshal 合计 2.0GB / 30s（总 4.3GB）。
+### 3.1 瓶颈（pprof 实测，500 房持续窗口 30s）
 
-## 4. 优化：room_list 事件合并广播
+- `hub.broadcastRoomList` **420ms cum = 42.9% CPU**：每次房间变动（~10 事件/s）都在 `h.mu` 下 O(rooms) 重建全量列表 + marshal + 逐个 lobby conn 写 socket → O(rooms×events) 渲染+序列化+写风暴。heap `alloc_space` 印证：roomListMsgLocked 698MB、protoRoomLocked 224MB、JSON marshal 合计 2.0GB / 30s。
+- 证据：`docs/evidence/pprof-before-cpu-top.txt`、`pprof-before-heap.pb.gz`。
 
-- `broadcastRoomList` 改为：锁内只置 `rlDirty` 脏位；独立 flusher goroutine 按 `RoomListFlush=50ms` 周期至多产出一次「渲染+marshal+推送」。~20 事件/s 合并为 ≤1 次广播/50ms。连接层原有的 per-conn 脏位合并（M1）叠加生效。
-- 可注入参数：测试注入 `RoomListFlush=0` 走同步旧路径，保持确定性。
+### 3.2 优化：room_list 事件合并广播（RoomListFlush=50ms）
 
-同档复测对比（500 房，同参数 60s）：
+锁内只置 `rlDirty`；flusher goroutine 按 50ms 周期至多一次「渲染+marshal+推送」。测试注入 Flush=0 走同步旧路径保持确定性。
 
-| 指标 | 优化前 | 优化后 | 变化 |
+同档对比（修复后工具口径，见 `bench-analysis2.txt` 修正前后对照）：
+
+| 指标（500 房，旧失真工具测） | 优化前 | 优化后 |
+|---|---|---|
+| p50 | 53.3ms | 1.01ms（−98%） |
+| p95 | 402.8ms | 71.1ms（−82%） |
+| avg | 112.2ms | 31.4ms（−72%） |
+
+修正后工具下 500 房已是 p50 0.24/p95 1.12/p99 3.82ms —— 优化方向不变，绝对水位远低于旧工具所示（旧测量把自身缺陷混进了样本）。`pprof-after-cpu-top.txt`：broadcastRoomList 退出热点，剩余为内核 socket IO（Syscall6）。
+
+### 3.3 工具缺陷修正幅度（诚实披露）
+
+| 档 | p95 (ms) 旧→新 | p99 旧→新 | moves/s 旧→新 |
 |---|---|---|---|
-| p50 | 53.3ms | 1.01ms | **−98%** |
-| p95 | 402.8ms | 71.1ms | **−82%** |
-| avg | 112.2ms | 31.4ms | **−72%** |
-| p99 | 682.6ms | 942.6ms | +38%（尾部回退：广播成本移除后露出连接写阻塞，见 pprof-after 顶部 Syscall6） |
+| 200 | 2.16 → 0.47 | 9.46 → 1.82 | 267 → 3969 (+14.9×) |
+| 500 | 71.1 → 1.12 | 942.6 → 3.82 | 718 → 9785 (+13.6×) |
+| 1000 | 1189 → 8.67 | 3003 → 20.76 | 945 → 18458 (+19.5×) |
 
-`pprof-after-cpu-top.txt`：broadcastRoomList 已退出热点；瓶颈转移为内核 socket 写。
+旧工具三缺陷（docs/reviews/m3.md M3-R1~R4）：suppressPong 致连接 hello+30s 全灭（"60s 档"实为 ~30s 负载）；pairRun forwarder 不退出偷帧致每对≈1 局后瘫痪；接收判定无 turn 校验 + 驱逐帧幸存者偏差污染分位数。
 
-## 5. 复现命令
+## 4. 复现命令
 
 ```bash
 cd backend && go build -o /tmp/gserver ./cmd/server && go build -o /tmp/loadtest ./cmd/loadtest
-PPROF=1 PORT=8080 /tmp/gserver &                 # 服务端
-/tmp/loadtest -rooms 200 -duration 60s -out bench-200.json
-/tmp/loadtest -rooms 500 -duration 60s -out bench-500.json
-/tmp/loadtest -rooms 1000 -duration 60s -out bench-1000.json
-# pprof（服务端运行时）：
+PPROF=1 PORT=8080 /tmp/gserver &
+/tmp/loadtest -rooms 200 -duration 60s -out bench2-200.json
+/tmp/loadtest -rooms 500 -duration 60s -out bench2-500.json
+/tmp/loadtest -rooms 1000 -duration 60s -out bench2-1000.json
+# pprof：
 go tool pprof -top -nodecount=30 http://localhost:8080/debug/pprof/profile?seconds=30
 ```
 
-合入后复验：`/tmp/loadtest -rooms 20 -duration 10s` → `docs/evidence/bench-sanity-20r.json`（40 conns、p50 0.33ms）。
+## 5. 已知尾部行为与后续方向
 
-## 6. 已知尾部行为
-
-- p99 在 500/1000 档的劣化路径是单连接写阻塞（慢客户端 socket），下一步优化方向：按连接批量写/写队列分片（未做，属 M3 之外）。
-- `TestConcurrent100Rooms` 历史上 1 次偶发 close 1006（高负载 pong 超时踢除）；M3 顺带修复了一个真实 flake（双重重连断言被陈旧 presence 帧污染）。压测全程 `go test -race ./...` 全绿。
+- 单连接写阻塞（慢客户端）仍是延迟尾部主因；下一步可按连接批量写/写队列分片（M3 之外）。
+- `TestConcurrent100Rooms` 历史 1 次偶发 close 1006（高负载 pong 超时）；M3 修复了一个真实 flake（双重重连断言被陈旧 presence 帧污染）。全程 `go test -race ./...` 全绿。
+- room_list 合并广播为降频优化；`protoRoomLocked` 仍 O(rooms) 持锁渲染（每 tick ≤1 次），规模再上一个量级时的下一刀位置已明确（写队列分片/增量列表）。
