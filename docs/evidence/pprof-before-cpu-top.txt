@@ -1,0 +1,163 @@
+File: server
+Build ID: fe9129fe92e483cb572bd7564deb75caec2f85c3
+Type: cpu
+Time: 2026-10-11 21:21:54 UTC
+Duration: 30s, Total samples = 980ms ( 3.27%)
+Showing nodes accounting for 980ms, 100% of 980ms total
+      flat  flat%   sum%        cum   cum%
+     260ms 26.53% 26.53%      260ms 26.53%  internal/runtime/syscall/linux.Syscall6
+      60ms  6.12% 32.65%       70ms  7.14%  encoding/json/internal/jsonwire.AppendQuote
+      50ms  5.10% 37.76%      110ms 11.22%  github.com/Aqua196/gomoku-battle/backend/internal/hub.protoRoomLocked
+      50ms  5.10% 42.86%       50ms  5.10%  runtime.memmove
+      50ms  5.10% 47.96%       90ms  9.18%  runtime.tryDeferToSpanScan
+      40ms  4.08% 52.04%       60ms  6.12%  github.com/Aqua196/gomoku-battle/backend/internal/hub.(*Hub).lobbyConnsLocked (inline)
+      40ms  4.08% 56.12%       40ms  4.08%  github.com/Aqua196/gomoku-battle/backend/internal/hub.(*Player).ID (inline)
+      30ms  3.06% 59.18%      250ms 25.51%  encoding/json/v2.makeStructArshaler.func2
+      30ms  3.06% 62.24%       30ms  3.06%  runtime.spanClass.sizeclass (inline)
+      20ms  2.04% 64.29%       20ms  2.04%  github.com/Aqua196/gomoku-battle/backend/internal/hub.(*Hub).Metrics
+      20ms  2.04% 66.33%       20ms  2.04%  internal/strconv.AppendUint
+      20ms  2.04% 68.37%       20ms  2.04%  runtime.casgstatus
+      20ms  2.04% 70.41%       20ms  2.04%  runtime.lock2
+      20ms  2.04% 72.45%       20ms  2.04%  runtime.memclrNoHeapPointers
+      10ms  1.02% 73.47%       10ms  1.02%  bufio.(*Reader).fill
+      10ms  1.02% 74.49%       10ms  1.02%  encoding/json/internal/jsonflags.Flags.Get
+      10ms  1.02% 75.51%       10ms  1.02%  encoding/json/jsontext.(*stateEntry).Increment
+      10ms  1.02% 76.53%       10ms  1.02%  encoding/json/jsontext.stateEntry.isValidNamespace (inline)
+      10ms  1.02% 77.55%       10ms  1.02%  encoding/json/v2.lookupArshaler
+      10ms  1.02% 78.57%       20ms  2.04%  encoding/json/v2.makeBoolArshaler.func1
+      10ms  1.02% 79.59%       60ms  6.12%  encoding/json/v2.makePointerArshaler.func2
+      10ms  1.02% 80.61%      250ms 25.51%  github.com/Aqua196/gomoku-battle/backend/internal/ws.(*conn).writePump.func3 (inline)
+      10ms  1.02% 81.63%       10ms  1.02%  internal/abi.(*Type).Kind (inline)
+      10ms  1.02% 82.65%       10ms  1.02%  internal/runtime/gc/scan.scanSpanPackedAVX512
+      10ms  1.02% 83.67%       10ms  1.02%  internal/runtime/maps.(*groupReference).elem (inline)
+      10ms  1.02% 84.69%       10ms  1.02%  reflect.Value.Bool
+      10ms  1.02% 85.71%       10ms  1.02%  reflect.Value.Elem
+      10ms  1.02% 86.73%       10ms  1.02%  reflect.Value.Field
+      10ms  1.02% 87.76%       20ms  2.04%  reflect.Value.Index
+      10ms  1.02% 88.78%       10ms  1.02%  reflect.flag.kind (inline)
+      10ms  1.02% 89.80%       10ms  1.02%  runtime.(*mspan).writeHeapBitsSmall
+      10ms  1.02% 90.82%       20ms  2.04%  runtime.(*unwinder).resolveInternal
+      10ms  1.02% 91.84%       10ms  1.02%  runtime.acquirem (inline)
+      10ms  1.02% 92.86%       10ms  1.02%  runtime.acquirepNoTrace
+      10ms  1.02% 93.88%       10ms  1.02%  runtime.asyncPreempt
+      10ms  1.02% 94.90%       10ms  1.02%  runtime.closechan
+      10ms  1.02% 95.92%       10ms  1.02%  runtime.heapArenaOf (inline)
+      10ms  1.02% 96.94%       50ms  5.10%  runtime.markroot
+      10ms  1.02% 97.96%       10ms  1.02%  runtime.nextFreeFast (inline)
+      10ms  1.02% 98.98%       10ms  1.02%  runtime.traceEnabled (inline)
+      10ms  1.02%   100%       10ms  1.02%  runtime.unlock2
+         0     0%   100%       10ms  1.02%  bufio.(*Reader).Peek
+         0     0%   100%       40ms  4.08%  bytes.Clone (inline)
+         0     0%   100%      290ms 29.59%  encoding/json.Marshal (inline)
+         0     0%   100%       10ms  1.02%  encoding/json.Unmarshal (inline)
+         0     0%   100%       10ms  1.02%  encoding/json/jsontext.(*Encoder).WriteToken
+         0     0%   100%       10ms  1.02%  encoding/json/jsontext.(*encoderState).WriteToken
+         0     0%   100%       10ms  1.02%  encoding/json/jsontext.(*stateMachine).popObject (inline)
+         0     0%   100%      290ms 29.59%  encoding/json/v2.Marshal
+         0     0%   100%       10ms  1.02%  encoding/json/v2.Unmarshal
+         0     0%   100%       20ms  2.04%  encoding/json/v2.makeIntArshaler.func1
+         0     0%   100%      230ms 23.47%  encoding/json/v2.makeSliceArshaler.func2
+         0     0%   100%       80ms  8.16%  encoding/json/v2.makeStringArshaler.func1
+         0     0%   100%      250ms 25.51%  encoding/json/v2.marshalEncode
+         0     0%   100%       10ms  1.02%  encoding/json/v2.unmarshalDecode
+         0     0%   100%       20ms  2.04%  github.com/Aqua196/gomoku-battle/backend/internal/game.(*Actor).Move.func1
+         0     0%   100%       20ms  2.04%  github.com/Aqua196/gomoku-battle/backend/internal/game.(*Actor).applyMove
+         0     0%   100%       40ms  4.08%  github.com/Aqua196/gomoku-battle/backend/internal/game.(*Actor).broadcast
+         0     0%   100%       30ms  3.06%  github.com/Aqua196/gomoku-battle/backend/internal/game.(*Actor).finish
+         0     0%   100%       30ms  3.06%  github.com/Aqua196/gomoku-battle/backend/internal/game.(*Actor).onTurnTimeout
+         0     0%   100%      290ms 29.59%  github.com/Aqua196/gomoku-battle/backend/internal/game.(*Actor).run
+         0     0%   100%      240ms 24.49%  github.com/Aqua196/gomoku-battle/backend/internal/game.(*Actor).run.func1
+         0     0%   100%       10ms  1.02%  github.com/Aqua196/gomoku-battle/backend/internal/game.(*Actor).sendErr
+         0     0%   100%       20ms  2.04%  github.com/Aqua196/gomoku-battle/backend/internal/hub.(*Hub).CreateRoom
+         0     0%   100%      170ms 17.35%  github.com/Aqua196/gomoku-battle/backend/internal/hub.(*Hub).PlayerDisconnected
+         0     0%   100%      420ms 42.86%  github.com/Aqua196/gomoku-battle/backend/internal/hub.(*Hub).broadcastRoomList
+         0     0%   100%      230ms 23.47%  github.com/Aqua196/gomoku-battle/backend/internal/hub.(*Hub).gameOver
+         0     0%   100%      120ms 12.24%  github.com/Aqua196/gomoku-battle/backend/internal/hub.(*Hub).roomListMsgLocked
+         0     0%   100%      290ms 29.59%  github.com/Aqua196/gomoku-battle/backend/internal/protocol.Marshal
+         0     0%   100%       10ms  1.02%  github.com/Aqua196/gomoku-battle/backend/internal/protocol.ParseInbound
+         0     0%   100%       20ms  2.04%  github.com/Aqua196/gomoku-battle/backend/internal/ws.(*Server).Handler.func2
+         0     0%   100%      210ms 21.43%  github.com/Aqua196/gomoku-battle/backend/internal/ws.(*Server).handleWS
+         0     0%   100%      260ms 26.53%  github.com/Aqua196/gomoku-battle/backend/internal/ws.(*conn).writePump
+         0     0%   100%      240ms 24.49%  github.com/Aqua196/gomoku-battle/backend/internal/ws.(*conn).writePump.func2
+         0     0%   100%       30ms  3.06%  github.com/Aqua196/gomoku-battle/backend/internal/ws.(*session).dispatch
+         0     0%   100%      210ms 21.43%  github.com/Aqua196/gomoku-battle/backend/internal/ws.(*session).readPump
+         0     0%   100%      170ms 17.35%  github.com/Aqua196/gomoku-battle/backend/internal/ws.(*session).readPump.func1
+         0     0%   100%       10ms  1.02%  github.com/gorilla/websocket.(*Conn).NextReader
+         0     0%   100%       10ms  1.02%  github.com/gorilla/websocket.(*Conn).ReadMessage
+         0     0%   100%      250ms 25.51%  github.com/gorilla/websocket.(*Conn).WriteMessage
+         0     0%   100%       10ms  1.02%  github.com/gorilla/websocket.(*Conn).advanceFrame
+         0     0%   100%       10ms  1.02%  github.com/gorilla/websocket.(*Conn).read
+         0     0%   100%      250ms 25.51%  github.com/gorilla/websocket.(*Conn).write
+         0     0%   100%      230ms 23.47%  github.com/gorilla/websocket.(*Conn).writeBufs (inline)
+         0     0%   100%      250ms 25.51%  github.com/gorilla/websocket.(*messageWriter).flushFrame
+         0     0%   100%       20ms  2.04%  internal/poll.(*FD).Write
+         0     0%   100%      230ms 23.47%  internal/poll.(*FD).Writev
+         0     0%   100%       20ms  2.04%  internal/poll.ignoringEINTRIO (inline)
+         0     0%   100%      230ms 23.47%  internal/poll.writev
+         0     0%   100%       10ms  1.02%  internal/runtime/gc/scan.ScanSpanPacked (inline)
+         0     0%   100%       10ms  1.02%  internal/runtime/gc/scan.ScanSpanPackedAVX512
+         0     0%   100%       10ms  1.02%  internal/runtime/maps.(*Iter).Next
+         0     0%   100%       10ms  1.02%  internal/runtime/syscall/linux.EpollWait
+         0     0%   100%       20ms  2.04%  internal/strconv.AppendInt
+         0     0%   100%      230ms 23.47%  net.(*Buffers).WriteTo
+         0     0%   100%       20ms  2.04%  net.(*conn).Write
+         0     0%   100%      230ms 23.47%  net.(*conn).writeBuffers
+         0     0%   100%       20ms  2.04%  net.(*netFD).Write
+         0     0%   100%      230ms 23.47%  net.(*netFD).writeBuffers
+         0     0%   100%      230ms 23.47%  net/http.(*ServeMux).ServeHTTP
+         0     0%   100%      230ms 23.47%  net/http.(*conn).serve
+         0     0%   100%      230ms 23.47%  net/http.HandlerFunc.ServeHTTP
+         0     0%   100%      230ms 23.47%  net/http.serverHandler.ServeHTTP
+         0     0%   100%       10ms  1.02%  reflect.Value.String
+         0     0%   100%       20ms  2.04%  runtime.(*unwinder).next
+         0     0%   100%       20ms  2.04%  runtime.acquirep
+         0     0%   100%       30ms  3.06%  runtime.bgsweep
+         0     0%   100%       10ms  1.02%  runtime.deductAssistCredit
+         0     0%   100%       10ms  1.02%  runtime.execute
+         0     0%   100%       30ms  3.06%  runtime.findRunnable
+         0     0%   100%       10ms  1.02%  runtime.freeSomeWbufs
+         0     0%   100%       10ms  1.02%  runtime.funcspdelta (inline)
+         0     0%   100%       10ms  1.02%  runtime.gcAssistAlloc
+         0     0%   100%       10ms  1.02%  runtime.gcAssistAlloc.func2
+         0     0%   100%       10ms  1.02%  runtime.gcAssistAlloc1
+         0     0%   100%      120ms 12.24%  runtime.gcBgMarkWorker
+         0     0%   100%      120ms 12.24%  runtime.gcBgMarkWorker.func2
+         0     0%   100%      120ms 12.24%  runtime.gcDrain
+         0     0%   100%       60ms  6.12%  runtime.gcDrainMarkWorkerDedicated (inline)
+         0     0%   100%       60ms  6.12%  runtime.gcDrainMarkWorkerIdle (inline)
+         0     0%   100%       10ms  1.02%  runtime.gcDrainN
+         0     0%   100%       10ms  1.02%  runtime.gcScanFinalizer
+         0     0%   100%       10ms  1.02%  runtime.goexit0
+         0     0%   100%       50ms  5.10%  runtime.growslice
+         0     0%   100%       10ms  1.02%  runtime.heapSetTypeNoHeader (inline)
+         0     0%   100%       20ms  2.04%  runtime.lock (inline)
+         0     0%   100%       20ms  2.04%  runtime.lockWithRank (inline)
+         0     0%   100%       20ms  2.04%  runtime.makeslice
+         0     0%   100%       40ms  4.08%  runtime.mallocgc
+         0     0%   100%       10ms  1.02%  runtime.mallocgcSmallScanHeader
+         0     0%   100%       20ms  2.04%  runtime.mallocgcSmallScanNoHeader
+         0     0%   100%       10ms  1.02%  runtime.mapIterNext
+         0     0%   100%       30ms  3.06%  runtime.markroot.func1
+         0     0%   100%       10ms  1.02%  runtime.markrootSpans
+         0     0%   100%       50ms  5.10%  runtime.mcall
+         0     0%   100%       10ms  1.02%  runtime.netpoll
+         0     0%   100%       40ms  4.08%  runtime.park_m
+         0     0%   100%       10ms  1.02%  runtime.pcvalue
+         0     0%   100%       30ms  3.06%  runtime.scanObject
+         0     0%   100%       10ms  1.02%  runtime.scanObjectsSmall
+         0     0%   100%       60ms  6.12%  runtime.scanSpan
+         0     0%   100%       10ms  1.02%  runtime.scanblock
+         0     0%   100%       10ms  1.02%  runtime.scanframeworker
+         0     0%   100%       30ms  3.06%  runtime.scanstack
+         0     0%   100%       40ms  4.08%  runtime.schedule
+         0     0%   100%       10ms  1.02%  runtime.stopm
+         0     0%   100%      130ms 13.27%  runtime.systemstack
+         0     0%   100%       10ms  1.02%  runtime.traceAcquire (inline)
+         0     0%   100%       10ms  1.02%  runtime.unlock (inline)
+         0     0%   100%       10ms  1.02%  runtime.unlockWithRank (inline)
+         0     0%   100%       10ms  1.02%  slices.Grow[go.shape.[]uint8,go.shape.uint8] (inline)
+         0     0%   100%       20ms  2.04%  strconv.AppendInt (inline)
+         0     0%   100%      250ms 25.51%  syscall.RawSyscall6
+         0     0%   100%      250ms 25.51%  syscall.Syscall
+         0     0%   100%       20ms  2.04%  syscall.Write (inline)
+         0     0%   100%       20ms  2.04%  syscall.write

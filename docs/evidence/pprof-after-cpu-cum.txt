@@ -1,0 +1,65 @@
+File: server
+Build ID: 4f58052fc106bb3aedb450d6090020cc46801b46
+Type: cpu
+Time: 2026-10-11 21:27:17 UTC
+Duration: 30s, Total samples = 150ms (  0.5%)
+Showing nodes accounting for 150ms, 100% of 150ms total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%       70ms 46.67%  runtime.schedule
+         0     0%     0%       60ms 40.00%  runtime.mcall
+         0     0%     0%       60ms 40.00%  runtime.park_m
+         0     0%     0%       50ms 33.33%  runtime.findRunnable
+         0     0%     0%       40ms 26.67%  github.com/Aqua196/gomoku-battle/backend/internal/hub.(*Hub).roomListFlushLoop
+         0     0%     0%       30ms 20.00%  encoding/json.Marshal (inline)
+         0     0%     0%       30ms 20.00%  encoding/json/v2.Marshal
+         0     0%     0%       30ms 20.00%  encoding/json/v2.marshalEncode
+         0     0%     0%       30ms 20.00%  github.com/Aqua196/gomoku-battle/backend/internal/hub.(*Hub).pushRoomList
+         0     0%     0%       30ms 20.00%  github.com/Aqua196/gomoku-battle/backend/internal/protocol.Marshal
+         0     0%     0%       30ms 20.00%  internal/runtime/syscall/linux.EpollWait
+      30ms 20.00% 20.00%       30ms 20.00%  internal/runtime/syscall/linux.Syscall6
+         0     0% 20.00%       30ms 20.00%  runtime.netpoll
+         0     0% 20.00%       20ms 13.33%  encoding/json/v2.makeSliceArshaler.func2
+         0     0% 20.00%       20ms 13.33%  encoding/json/v2.makeStructArshaler.func2
+         0     0% 20.00%       20ms 13.33%  runtime.gcBgMarkWorker
+         0     0% 20.00%       20ms 13.33%  runtime.gcBgMarkWorker.func2
+         0     0% 20.00%       20ms 13.33%  runtime.gcDrain
+         0     0% 20.00%       20ms 13.33%  runtime.gcDrainMarkWorkerIdle (inline)
+      10ms  6.67% 26.67%       20ms 13.33%  runtime.pidleget
+         0     0% 26.67%       20ms 13.33%  runtime.systemstack
+         0     0% 26.67%       10ms  6.67%  encoding/json/v2.lookupArshaler
+      10ms  6.67% 33.33%       10ms  6.67%  encoding/json/v2.makeStringArshaler.func1
+         0     0% 33.33%       10ms  6.67%  github.com/Aqua196/gomoku-battle/backend/internal/game.(*Actor).run
+         0     0% 33.33%       10ms  6.67%  github.com/Aqua196/gomoku-battle/backend/internal/game.(*Actor).run.func1
+         0     0% 33.33%       10ms  6.67%  github.com/Aqua196/gomoku-battle/backend/internal/hub.(*Hub).gameOver
+         0     0% 33.33%       10ms  6.67%  github.com/Aqua196/gomoku-battle/backend/internal/hub.(*Hub).roomListMsgLocked
+      10ms  6.67% 40.00%       10ms  6.67%  github.com/Aqua196/gomoku-battle/backend/internal/hub.protoRoomLocked
+      10ms  6.67% 46.67%       10ms  6.67%  internal/abi.NoEscape
+         0     0% 46.67%       10ms  6.67%  internal/runtime/maps.(*Map).Delete
+         0     0% 46.67%       10ms  6.67%  internal/runtime/maps.(*table).Delete
+         0     0% 46.67%       10ms  6.67%  internal/sync.(*HashTrieMap[go.shape.interface {},go.shape.interface {}]).Load
+         0     0% 46.67%       10ms  6.67%  reflect.Value.Field
+      10ms  6.67% 53.33%       10ms  6.67%  reflect.add (inline)
+         0     0% 53.33%       10ms  6.67%  runtime.(*gcControllerState).enlistWorker
+      10ms  6.67% 60.00%       10ms  6.67%  runtime.(*gcControllerState).releaseNextGCMarkWorker
+      10ms  6.67% 66.67%       10ms  6.67%  runtime.(*limiterEvent).stop
+      10ms  6.67% 73.33%       10ms  6.67%  runtime.(*randomEnum).next (inline)
+         0     0% 73.33%       10ms  6.67%  runtime.gopreempt_m (inline)
+         0     0% 73.33%       10ms  6.67%  runtime.goschedImpl
+         0     0% 73.33%       10ms  6.67%  runtime.mapdelete_faststr
+      10ms  6.67% 80.00%       10ms  6.67%  runtime.memequal
+         0     0% 80.00%       10ms  6.67%  runtime.morestack
+      10ms  6.67% 86.67%       10ms  6.67%  runtime.nanotime1
+         0     0% 86.67%       10ms  6.67%  runtime.newstack
+         0     0% 86.67%       10ms  6.67%  runtime.pidlegetSpinning
+         0     0% 86.67%       10ms  6.67%  runtime.preemptM (inline)
+         0     0% 86.67%       10ms  6.67%  runtime.preemptone
+         0     0% 86.67%       10ms  6.67%  runtime.resetspinning
+         0     0% 86.67%       10ms  6.67%  runtime.scanObjectsSmall
+         0     0% 86.67%       10ms  6.67%  runtime.scanSpan
+         0     0% 86.67%       10ms  6.67%  runtime.signalM
+         0     0% 86.67%       10ms  6.67%  runtime.stealWork
+         0     0% 86.67%       10ms  6.67%  runtime.strequal
+      10ms  6.67% 93.33%       10ms  6.67%  runtime.tgkill
+      10ms  6.67%   100%       10ms  6.67%  runtime.tryDeferToSpanScan
+         0     0%   100%       10ms  6.67%  runtime.wakep
+         0     0%   100%       10ms  6.67%  sync.(*Map).Load (inline)

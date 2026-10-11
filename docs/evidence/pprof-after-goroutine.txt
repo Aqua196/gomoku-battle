@@ -1,0 +1,54 @@
+goroutine profile: total 6
+1 @ 0x448d51 0x48b67d 0x6ebc51 0x6eb925 0x6e8889 0x7027d4 0x70321c 0x65dfa9 0x65fb2f 0x66984e 0x65c47c 0x4937c1
+#	0x6ebc50	runtime/pprof.writeRuntimeProfile+0xb0	/usr/local/go/src/runtime/pprof/pprof.go:848
+#	0x6eb924	runtime/pprof.writeGoroutine+0x44	/usr/local/go/src/runtime/pprof/pprof.go:781
+#	0x6e8888	runtime/pprof.(*Profile).WriteTo+0x148	/usr/local/go/src/runtime/pprof/pprof.go:405
+#	0x7027d3	net/http/pprof.handler.ServeHTTP+0x553	/usr/local/go/src/net/http/pprof/pprof.go:272
+#	0x70321b	net/http/pprof.Index+0xdb		/usr/local/go/src/net/http/pprof/pprof.go:391
+#	0x65dfa8	net/http.HandlerFunc.ServeHTTP+0x28	/usr/local/go/src/net/http/server.go:2358
+#	0x65fb2e	net/http.(*ServeMux).ServeHTTP+0x1ce	/usr/local/go/src/net/http/server.go:2923
+#	0x66984d	net/http.serverHandler.ServeHTTP+0x8d	/usr/local/go/src/net/http/server.go:3436
+#	0x65c47b	net/http.(*conn).serve+0x6db		/usr/local/go/src/net/http/server.go:2157
+
+1 @ 0x48c8aa 0x44c1d7 0x48baa5 0x4dac87 0x4db6e8 0x4db6d6 0x5536a5 0x55c3c5 0x656430 0x5eaba3 0x5eacd2 0x65c5d3 0x4937c1
+#	0x48baa4	internal/poll.runtime_pollWait+0x84		/usr/local/go/src/runtime/netpoll.go:351
+#	0x4dac86	internal/poll.(*pollDesc).wait+0x26		/usr/local/go/src/internal/poll/fd_poll_runtime.go:84
+#	0x4db6e7	internal/poll.(*pollDesc).waitRead+0x2a7	/usr/local/go/src/internal/poll/fd_poll_runtime.go:89
+#	0x4db6d5	internal/poll.(*FD).Read+0x295			/usr/local/go/src/internal/poll/fd_unix.go:170
+#	0x5536a4	net.(*netFD).Read+0x24				/usr/local/go/src/net/fd_posix.go:68
+#	0x55c3c4	net.(*conn).Read+0x44				/usr/local/go/src/net/net.go:196
+#	0x65642f	net/http.(*connReader).Read+0x14f		/usr/local/go/src/net/http/server.go:856
+#	0x5eaba2	bufio.(*Reader).fill+0x102			/usr/local/go/src/bufio/bufio.go:113
+#	0x5eacd1	bufio.(*Reader).Peek+0x51			/usr/local/go/src/bufio/bufio.go:152
+#	0x65c5d2	net/http.(*conn).serve+0x832			/usr/local/go/src/net/http/server.go:2193
+
+1 @ 0x48c8aa 0x44c1d7 0x48baa5 0x4dac87 0x4dc17d 0x4dc16b 0x554469 0x563f1b 0x563390 0x660e39 0x6609d1 0x70a0c5 0x70a026 0x4531e7 0x4937c1
+#	0x48baa4	internal/poll.runtime_pollWait+0x84		/usr/local/go/src/runtime/netpoll.go:351
+#	0x4dac86	internal/poll.(*pollDesc).wait+0x26		/usr/local/go/src/internal/poll/fd_poll_runtime.go:84
+#	0x4dc17c	internal/poll.(*pollDesc).waitRead+0x27c	/usr/local/go/src/internal/poll/fd_poll_runtime.go:89
+#	0x4dc16a	internal/poll.(*FD).Accept+0x26a		/usr/local/go/src/internal/poll/fd_unix.go:618
+#	0x554468	net.(*netFD).accept+0x28			/usr/local/go/src/net/fd_unix.go:149
+#	0x563f1a	net.(*TCPListener).accept+0x1a			/usr/local/go/src/net/tcpsock_posix.go:159
+#	0x56338f	net.(*TCPListener).Accept+0x2f			/usr/local/go/src/net/tcpsock.go:387
+#	0x660e38	net/http.(*Server).Serve+0x378			/usr/local/go/src/net/http/server.go:3574
+#	0x6609d0	net/http.(*Server).ListenAndServe+0x70		/usr/local/go/src/net/http/server.go:3485
+#	0x70a0c4	net/http.ListenAndServe+0x5c4			/usr/local/go/src/net/http/server.go:3836
+#	0x70a025	main.main+0x525					/home/ubuntu/gomoku-battle/backend/cmd/server/main.go:34
+#	0x4531e6	runtime.main+0x426				/usr/local/go/src/runtime/proc.go:302
+
+1 @ 0x48c8aa 0x465717 0x6cb4b5 0x4937c1
+#	0x6cb4b4	github.com/Aqua196/gomoku-battle/backend/internal/hub.(*Hub).sweepLoop+0xb4	/home/ubuntu/gomoku-battle/backend/internal/hub/hub.go:132
+
+1 @ 0x48c8aa 0x465717 0x6cc2d1 0x4937c1
+#	0x6cc2d0	github.com/Aqua196/gomoku-battle/backend/internal/hub.(*Hub).roomListFlushLoop+0xd0	/home/ubuntu/gomoku-battle/backend/internal/hub/hub.go:257
+
+1 @ 0x4c28c5 0x4c1098 0x4db654 0x4db63f 0x4db581 0x5536a5 0x55c3c5 0x656012 0x4937c1
+#	0x4c28c4	syscall.Syscall+0x24				/usr/local/go/src/syscall/syscall_linux.go:74
+#	0x4c1097	syscall.read+0x37				/usr/local/go/src/syscall/zsyscall_linux_amd64.go:736
+#	0x4db653	syscall.Read+0x213				/usr/local/go/src/syscall/syscall_unix.go:183
+#	0x4db63e	internal/poll.ignoringEINTRIO+0x1fe		/usr/local/go/src/internal/poll/fd_unix.go:743
+#	0x4db580	internal/poll.(*FD).Read+0x140			/usr/local/go/src/internal/poll/fd_unix.go:166
+#	0x5536a4	net.(*netFD).Read+0x24				/usr/local/go/src/net/fd_posix.go:68
+#	0x55c3c4	net.(*conn).Read+0x44				/usr/local/go/src/net/net.go:196
+#	0x656011	net/http.(*connReader).backgroundRead+0x31	/usr/local/go/src/net/http/server.go:746
+
