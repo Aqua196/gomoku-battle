@@ -505,7 +505,7 @@ h2 {
   border: 2px solid var(--danger);
   box-shadow: 0 0 8px rgba(240, 98, 95, 0.8);
 }
-.ghost {
+.cell .ghost {
   position: absolute;
   inset: 8%;
   border-radius: 50%;
@@ -516,10 +516,10 @@ h2 {
 .cell.playable:hover .ghost {
   opacity: 0.45;
 }
-.ghost.black {
+.cell .ghost.black {
   background: #111;
 }
-.ghost.white {
+.cell .ghost.white {
   background: #fff;
 }
 
