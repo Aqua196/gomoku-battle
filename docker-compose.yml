@@ -1,0 +1,22 @@
+# One-command stack: `docker compose up --build` serves the whole app on
+# :8080 (frontend is hosted by the backend on the same port). Redis runs
+# alongside; the app uses it when reachable and falls back to in-memory
+# with a logged warning when it is not, so the stack also works without it.
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      REDIS_ADDR: "redis:6379"
+      # PPROF: "1"            # uncomment to mount /debug/pprof
+      # ALLOW_ANY_ORIGIN: "1" # dev only: skip WS origin check
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    # session + room-registry persistence; data is rebuildable so no volume
+    expose:
+      - "6379"

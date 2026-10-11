@@ -57,6 +57,7 @@ type Actor struct {
 	// bothOfflineAt is when the second seat went offline; the verdict is
 	// suspended then (PROTOCOL §5) and an abandon timer counts down from it.
 	bothOfflineAt time.Time
+	moveHook      func(playerID string)
 }
 
 // New creates an actor for a room; black moves first.
@@ -84,6 +85,10 @@ func (a *Actor) SetObserver(fn func(*protocol.GameState)) { a.observer = fn }
 // Done exposes the actor's completion channel for lifecycle-bound helpers
 // (e.g. the AI driver exits when the game ends).
 func (a *Actor) Done() <-chan struct{} { return a.done }
+
+// SetMoveHook registers a callback fired once per accepted move — the hub
+// uses it for /metrics move counters (M4).
+func (a *Actor) SetMoveHook(fn func(playerID string)) { a.moveHook = fn }
 
 // Move queues a stone-placement attempt by playerID at (x,y).
 func (a *Actor) Move(playerID string, x, y int) {
@@ -258,6 +263,9 @@ func (a *Actor) applyMove(playerID string, x, y int) {
 	a.board.Place(x, y, c)
 	a.moveNumber++
 	a.lastMove = &protocol.Pos{X: x, Y: y}
+	if a.moveHook != nil {
+		a.moveHook(playerID)
+	}
 
 	switch {
 	case a.board.WinFrom(x, y):
