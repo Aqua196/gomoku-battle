@@ -76,11 +76,14 @@ type roomEntry struct {
 
 // Metrics is the /metrics JSON payload (PROTOCOL §7).
 type Metrics struct {
-	Connections  int `json:"connections"`
-	LobbyPlayers int `json:"lobbyPlayers"`
-	Rooms        int `json:"rooms"`
-	ActiveGames  int `json:"activeGames"`
-	GamesPlayed  int `json:"gamesPlayed"`
+	Connections  int     `json:"connections"`
+	LobbyPlayers int     `json:"lobbyPlayers"`
+	Rooms        int     `json:"rooms"`
+	ActiveGames  int     `json:"activeGames"`
+	GamesPlayed  int     `json:"gamesPlayed"`
+	TotalMoves   int     `json:"totalMoves"`
+	MovesPerSec  float64 `json:"movesPerSec"` // accepted moves, trailing 60s
+	AiGames      int     `json:"aiGames"`
 }
 
 // Hub owns the player/room/queue registries.
@@ -95,6 +98,10 @@ type Hub struct {
 
 	connCount   atomic.Int64
 	gamesPlayed atomic.Int64
+	totalMoves  atomic.Int64
+	aiGames     atomic.Int64
+	mtx         sync.Mutex
+	moveTimes   []int64 // unixnano of accepted moves, pruned to 60s
 
 	sweepStop chan struct{}
 	rlDirty   bool // pending lobby room_list broadcast (coalesced flush)
@@ -163,14 +170,37 @@ func (h *Hub) ConnOpened() { h.connCount.Add(1) }
 // ConnClosed counts a socket that finished its read loop for metrics.
 func (h *Hub) ConnClosed() { h.connCount.Add(-1) }
 
+// noteMove is the actor's move hook: bumps total and timestamps the move
+// into the trailing 60s window for movesPerSec.
+func (h *Hub) noteMove(_ string) {
+	h.totalMoves.Add(1)
+	h.mtx.Lock()
+	h.moveTimes = append(h.moveTimes, time.Now().UnixNano())
+	h.mtx.Unlock()
+}
+
 // Metrics snapshots the counters for /metrics.
 func (h *Hub) Metrics() Metrics {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	cutoff := time.Now().Add(-time.Minute).UnixNano()
+	h.mtx.Lock()
+	keep := h.moveTimes[:0]
+	for _, ts := range h.moveTimes {
+		if ts >= cutoff {
+			keep = append(keep, ts)
+		}
+	}
+	h.moveTimes = keep
+	recent := len(keep)
+	h.mtx.Unlock()
 	m := Metrics{
 		Connections: int(h.connCount.Load()),
 		Rooms:       len(h.rooms),
 		GamesPlayed: int(h.gamesPlayed.Load()),
+		TotalMoves:  int(h.totalMoves.Load()),
+		MovesPerSec: float64(recent) / 60,
+		AiGames:     int(h.aiGames.Load()),
 	}
 	for _, p := range h.players {
 		if p.conn != nil && p.state != StatePlaying {
