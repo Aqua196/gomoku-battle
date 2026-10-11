@@ -9,6 +9,7 @@ import {
 } from 'react'
 import type { ReactNode } from 'react'
 import { WSClient, defaultWsUrl } from '../ws/client'
+import { createResumeWatchdog, smoothClockOffset } from './clock'
 import type { ConnectionStatus } from '../ws/client'
 import type {
   Color,
@@ -32,6 +33,8 @@ export interface SessionState {
   nick: string
   resumed: boolean
   latencyMs: number | null
+  /** EMA of (serverNow − Date.now()); aligns deadline countdowns to server time */
+  clockOffsetMs: number | null
 }
 
 export interface LobbyState {
@@ -67,6 +70,7 @@ export const initialState: AppState = {
     nick: '',
     resumed: false,
     latencyMs: null,
+    clockOffsetMs: null,
   },
   lobby: { rooms: [], myRoomId: null, matchmaking: false, queuePosition: null },
   game: {
@@ -87,6 +91,7 @@ export type Action =
   | { type: 'NICK'; nick: string }
   | { type: 'LATENCY'; ms: number }
   | { type: 'SERVER'; msg: ServerMessage }
+  | { type: 'LOCAL_ERROR'; code: string; message: string }
   | { type: 'DISMISS_ERROR' }
   | { type: 'CLEAR_GAME' }
 
@@ -108,6 +113,11 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, session: { ...state.session, latencyMs: action.ms } }
     case 'DISMISS_ERROR':
       return { ...state, error: null }
+    case 'LOCAL_ERROR':
+      return {
+        ...state,
+        error: { code: action.code, message: action.message, ts: Date.now() },
+      }
     case 'CLEAR_GAME':
       return { ...state, game: { ...initialState.game } }
     case 'SERVER':
@@ -115,19 +125,44 @@ export function reducer(state: AppState, action: Action): AppState {
   }
 }
 
+function applyServerNow(session: SessionState, serverNow: unknown): SessionState {
+  if (typeof serverNow !== 'number') return session
+  return {
+    ...session,
+    clockOffsetMs: smoothClockOffset(session.clockOffsetMs, serverNow - Date.now()),
+  }
+}
+
+
 function reduceServer(state: AppState, msg: ServerMessage): AppState {
   switch (msg.type) {
-    case 'welcome':
-      return {
-        ...state,
-        session: {
+    case 'welcome': {
+      const session = applyServerNow(
+        {
           ...state.session,
           status: 'connected',
           playerId: msg.playerId,
           nick: msg.nick,
           resumed: msg.resumed,
         },
+        msg.serverNow,
+      )
+      if (msg.resumed) {
+        // Takeover / disconnected-session resume: keep views — a game_state
+        // follows when a live game exists; the provider watchdog clears the
+        // stale board if none arrives within the grace window (§1).
+        return { ...state, session }
       }
+      // Fresh session (invalid/expired token, server restart): every previous
+      // view is stale — drop lobby seat and any ghost board so the user lands
+      // back in the lobby (R1).
+      return {
+        ...state,
+        session,
+        lobby: { ...initialState.lobby },
+        game: { ...initialState.game },
+      }
+    }
     case 'room_list':
       return { ...state, lobby: { ...state.lobby, rooms: msg.rooms } }
     case 'room':
@@ -163,6 +198,7 @@ function reduceServer(state: AppState, msg: ServerMessage): AppState {
     case 'game_state':
       return {
         ...state,
+        session: applyServerNow(state.session, msg.game.serverNow),
         game: {
           ...state.game,
           game: msg.game,
@@ -177,6 +213,7 @@ function reduceServer(state: AppState, msg: ServerMessage): AppState {
     case 'game_over':
       return {
         ...state,
+        session: applyServerNow(state.session, msg.game.serverNow),
         game: {
           ...state.game,
           game: msg.game,
@@ -228,6 +265,10 @@ const StoreContext = createContext<{ state: AppState; api: StoreApi } | null>(nu
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const clientRef = useRef<WSClient | null>(null)
+  const resumeWatchdogRef = useRef<ReturnType<typeof createResumeWatchdog> | null>(null)
+  resumeWatchdogRef.current ??= createResumeWatchdog(() =>
+    dispatch({ type: 'CLEAR_GAME' }),
+  )
   const nickRef = useRef(state.session.nick)
   nickRef.current = state.session.nick
 
@@ -248,6 +289,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           // Persist the reconnection token + effective nick (§1, §9).
           localStorage.setItem(LS_TOKEN, m.token)
           localStorage.setItem(LS_NICK, m.nick)
+          // §1: game_state follows only when the resumed session had a live
+          // game — arm the watchdog to clear any stale board otherwise.
+          if (m.resumed) resumeWatchdogRef.current?.arm()
+          else resumeWatchdogRef.current?.cancel()
+        }
+        if (m.type === 'game_state' || m.type === 'game_over') {
+          resumeWatchdogRef.current?.cancel()
         }
         dispatch({ type: 'SERVER', msg: m })
       },
@@ -261,7 +309,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const stored = localStorage.getItem(LS_NICK)
     if (stored) connect(stored)
-    return () => clientRef.current?.close()
+    return () => {
+      clientRef.current?.close()
+      resumeWatchdogRef.current?.cancel()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -277,7 +328,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const api = useMemo<StoreApi>(() => {
-    const send = (msg: Parameters<WSClient['send']>[0]) => clientRef.current?.send(msg)
+    const send = (msg: Parameters<WSClient['send']>[0]) => {
+      const ok = clientRef.current?.send(msg) ?? false
+      if (!ok) {
+        // Dropped while the socket is down — tell the user instead of
+        // silently swallowing the action (R14).
+        dispatch({
+          type: 'LOCAL_ERROR',
+          code: 'offline',
+          message: '连接已断开，正在重连，请稍候再试',
+        })
+      }
+      return ok
+    }
     return {
       connect,
       createRoom: (name) => send({ type: 'create_room', ...(name ? { name } : {}) }),

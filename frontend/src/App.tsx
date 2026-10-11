@@ -15,10 +15,11 @@ const ERROR_LABEL: Record<string, string> = {
   not_in_lobby: '当前不在大厅',
   game_over: '对局已结束',
   hello_timeout: '连接超时',
-  unauthorized: '会话失效，请重新进入',
+  unauthorized: '身份验证失败，正在重新连接',
   invalid_difficulty: '无效难度',
   bad_request: '请求格式错误',
   internal: '服务器内部错误',
+  offline: '连接已断开，正在重连，请稍候再试',
 }
 
 function Redirector() {
