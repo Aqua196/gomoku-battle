@@ -20,7 +20,9 @@ export function Game() {
   const { state, api } = useStore()
   const { game: gv, session } = state
   const navigate = useNavigate()
-  const now = useNow(200)
+  // Server-aligned clock for server deadlines; local clock for local stamps.
+  const localNow = useNow(200)
+  const now = localNow + (session.clockOffsetMs ?? 0)
   const [confirmResign, setConfirmResign] = useState(false)
 
   const game = gv.game
@@ -51,7 +53,7 @@ export function Game() {
   const oppDeadline = !oppOnline ? (gv.opponentDeadline ?? game.reconnectDeadline) : null
   const oppLeft = oppDeadline ? Math.max(0, oppDeadline - now) : null
   const showReconnected =
-    gv.opponentReconnectedAt !== null && now - gv.opponentReconnectedAt < 3000
+    gv.opponentReconnectedAt !== null && localNow - gv.opponentReconnectedAt < 3000
 
   const backToLobby = () => {
     api.clearGame()
@@ -75,6 +77,7 @@ export function Game() {
             player={game.players.black}
             isYou={gv.youColor === 'black'}
             isTurn={playing && game.turn === 'black'}
+            online={oppColor === 'black' ? oppOnline : game.players.black.connected}
           />
           <span className="vs">VS</span>
           <PlayerCard
@@ -82,7 +85,7 @@ export function Game() {
             player={game.players.white}
             isYou={gv.youColor === 'white'}
             isTurn={playing && game.turn === 'white'}
-            online={oppOnline}
+            online={oppColor === 'white' ? oppOnline : game.players.white.connected}
           />
         </div>
 
@@ -127,7 +130,8 @@ export function Game() {
           {game.board.flatMap((row, y) =>
             row.map((cell, x) => {
               const last = game.lastMove?.x === x && game.lastMove?.y === y
-              const playable = cell === 0 && myTurn
+              const playable =
+                cell === 0 && myTurn && session.status === 'connected'
               const cls = [
                 'cell',
                 x === 0 && 'e-l',
