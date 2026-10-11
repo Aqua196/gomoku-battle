@@ -130,6 +130,26 @@ describe('<Game> 人机对局', () => {
     expect(screen.getByText('返回大厅')).toBeInTheDocument()
   })
 
+  it('abandoned 终局显示「双方弃局」而非「平局」', () => {
+    const s = aiState(
+      aiGame({ status: 'finished', winner: null, winReason: 'abandoned' }),
+    )
+    s.game.over = { reason: 'abandoned', winner: null }
+    storeMock.state.current = s
+    renderGame()
+    expect(screen.getByText('双方弃局')).toBeInTheDocument()
+    expect(screen.queryByText('平局')).toBeNull()
+    expect(screen.getByText('双方断线超时')).toBeInTheDocument()
+  })
+
+  it('draw 终局仍显示「平局」', () => {
+    const s = aiState(aiGame({ status: 'finished', winner: null, winReason: 'draw' }))
+    s.game.over = { reason: 'draw', winner: null }
+    storeMock.state.current = s
+    renderGame()
+    expect(screen.getByText('平局')).toBeInTheDocument()
+  })
+
   it('人机房间保留认输按钮', () => {
     storeMock.state.current = aiState(aiGame())
     renderGame()

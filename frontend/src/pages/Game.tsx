@@ -15,6 +15,7 @@ const REASON_LABEL: Record<GameOverReason, string> = {
   timeout: '回合超时判负',
   resign: '认输',
   disconnect_timeout: '断线超时判负',
+  abandoned: '双方断线超时',
 }
 
 export function Game() {
@@ -48,7 +49,7 @@ export function Game() {
   // M2: AI seat + 「人机 · 难度」badge + 「AI 思考中」derivation.
   const aiOpp = aiOpponent(game)
   const aiBadge = aiBadgeLabel(aiOpp)
-  const aiThinking = isAiThinking(game, aiOpp, gv.youColor, gv.over !== null)
+  const aiThinking = isAiThinking(game, gv.over !== null)
 
   const playing = game.status === 'playing'
   const myTurn = playing && !gv.over && game.turn === gv.youColor
@@ -208,7 +209,9 @@ export function Game() {
           <div className="card over-card">
             <h2 className={`over-title ${gv.over.winner === null ? 'draw' : gv.over.winner === gv.youColor ? 'win' : 'lose'}`}>
               {gv.over.winner === null
-                ? '平局'
+                ? gv.over.reason === 'abandoned'
+                  ? '双方弃局'
+                  : '平局'
                 : gv.over.winner === gv.youColor
                   ? '你赢了！'
                   : '对手获胜'}
