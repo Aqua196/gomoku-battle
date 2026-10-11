@@ -13,7 +13,7 @@
 | 断线重连 30s 恢复/超时判负 | `game actor + ws` | `TestReconnectResume` `TestReconnectTimeout` + 实盘 token 重连脚本输出 | ✅ |
 | 前端大厅+棋盘，完整打完一局 | `frontend/` | `docs/evidence/m1-e2e-output.txt` + `m1-e2e-gameover.png`（双浏览器 Alice/Bob 9 手整局，五连获胜弹层） | ✅ |
 | **关卡：100 房间并发 go test -race** | — | `docs/evidence/m1-go-test-race.txt`（200 连接 100 房整局，-race 全绿含 -count=2） | ✅ |
-| 评审：≥10 条问题并修复复测 | — | `docs/reviews/m1.md` | ☐ 进行中 |
+| 评审：≥10 条问题并修复复测 | — | `docs/reviews/m1.md`：**15 条**（1 critical/5 major/9 minor）全部修复并复测（后端 work/m1-fixes + 前端 work/m1-fixes-frontend 已合入，新增 14 个回归测试 -race 全绿；takeover/会话TTL/广播合并/actor兜底/排空裁决/双断挂起/serverNow 均有实盘或测试证据） | ✅ |
 
 修复记录：`7e5d51a` CSS 类名冲突——`.ghost` 棋盘预览子样式误命中 `.btn.ghost` 按钮形成全页透明遮罩（e2e 中快速匹配不可点击），已收敛为 `.cell .ghost`。
 
