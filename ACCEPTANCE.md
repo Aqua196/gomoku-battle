@@ -6,14 +6,16 @@
 
 | 范围 | 实现 | 关卡/证据 | 状态 |
 |---|---|---|---|
-| WS 网关（连接/心跳/断线检测/昵称token） | `backend/internal/ws` | `TestWS*` 集成测试 | ☐ |
-| 房间（创建/加入/离开/列表） | `backend/internal/hub` | `TestRoom*` | ☐ |
-| 快速匹配 | `backend/internal/hub` | `TestMatchmake*` | ☐ |
-| 服务端权威规则（校验/胜负/平局/回合超时） | `backend/internal/game` | `TestRules*` 四方向/边界/平局 | ☐ |
-| 断线重连 30s 恢复/超时判负 | `game actor + ws` | `TestReconnect*` | ☐ |
-| 前端大厅+棋盘，完整打完一局 | `frontend/` | 手动/脚本 e2e 记录 | ☐ |
-| **关卡：100 房间并发 go test -race** | — | `TestConcurrent100Rooms -race` | ☐ |
-| 评审：≥10 条问题并修复复测 | — | `docs/reviews/m1.md` | ☐ |
+| WS 网关（连接/心跳/断线检测/昵称token） | `backend/internal/ws` | `TestWSHello*`（含超时/校验）+ 实盘连接 | ✅ |
+| 房间（创建/加入/离开/列表） | `backend/internal/hub` | `TestRoomCreateJoinList` `TestRoomErrors` `TestRoomLeaveWaiting` | ✅ |
+| 快速匹配 | `backend/internal/hub` | `TestMatchmakeAndCancel` `TestMatchmakeRequiresLobby` + 浏览器 e2e 配对 | ✅ |
+| 服务端权威规则（校验/胜负/平局/回合超时） | `backend/internal/game` | `TestRulesWin*`(横/竖/双斜/角落贴边/长连) `TestRulesFullBoardDraw` `TestRulesIllegalMoves` `TestTurnTimeout` | ✅ |
+| 断线重连 30s 恢复/超时判负 | `game actor + ws` | `TestReconnectResume` `TestReconnectTimeout` + 实盘 token 重连脚本输出 | ✅ |
+| 前端大厅+棋盘，完整打完一局 | `frontend/` | `docs/evidence/m1-e2e-output.txt` + `m1-e2e-gameover.png`（双浏览器 Alice/Bob 9 手整局，五连获胜弹层） | ✅ |
+| **关卡：100 房间并发 go test -race** | — | `docs/evidence/m1-go-test-race.txt`（200 连接 100 房整局，-race 全绿含 -count=2） | ✅ |
+| 评审：≥10 条问题并修复复测 | — | `docs/reviews/m1.md` | ☐ 进行中 |
+
+修复记录：`7e5d51a` CSS 类名冲突——`.ghost` 棋盘预览子样式误命中 `.btn.ghost` 按钮形成全页透明遮罩（e2e 中快速匹配不可点击），已收敛为 `.cell .ghost`。
 
 ## M2 AI 对手
 
