@@ -1,0 +1,52 @@
+M4 docker compose 实证（docker 29.7.2 / compose v5.4.0，本机真实输出）
+=====================================================================
+
+$ docker compose up --build -d
+#25 naming to docker.io/library/gomoku-battle-app:latest done
+ Container gomoku-battle-redis-1 Started
+ Container gomoku-battle-app-1 Started
+
+$ docker compose ps
+NAME                    IMAGE               COMMAND          SERVICE   STATUS         PORTS
+gomoku-battle-app-1     gomoku-battle-app   "/app/server"    app       Up 3 seconds   0.0.0.0:8080->8080/tcp
+gomoku-battle-redis-1   redis:7-alpine      "docker-entrypo…" redis    Up 3 seconds   6379/tcp
+
+$ curl -s localhost:8080/healthz
+ok
+
+$ curl -s localhost:8080/metrics
+{"connections":0,"lobbyPlayers":0,"rooms":0,"activeGames":0,"gamesPlayed":0,
+ "totalMoves":0,"movesPerSec":0,"aiGames":0}
+
+$ curl -s localhost:8080/ | head -3        # 前端由后端同端口托管
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+
+# Redis 真实启用（非 fallback）：
+$ docker compose logs app | head -2
+app-1  | INFO store: redis addr=redis:6379
+app-1  | INFO gomoku-battle backend listening port=8080 static=frontend/dist pprof=false
+
+# 对容器跑真实 WS 对局（loadtest 打宿主机 8080 -> 容器）：
+$ /tmp/loadtest -addr ws://localhost:8080/ws -rooms 20 -duration 10s \
+      -move-interval 50ms -ramp 5ms
+games started/finished: 45/13   moves_accepted: 3896   errors: {already_in_room:10, not_in_room:2}
+
+# 对局中 metrics 再采样（新字段真实增长）：
+$ curl -s localhost:8080/metrics
+{"connections":0,"lobbyPlayers":0,"rooms":0,"activeGames":0,"gamesPlayed":45,
+ "totalMoves":3909,"movesPerSec":65.15,"aiGames":0}
+
+# slog 结构化事件（compose logs 摘录，字段带 playerId/roomId）：
+app-1  | INFO player connected playerId=p_b15OxGcn5ig nick=lt-0-963396974353639280
+app-1  | INFO game started roomId=r_Oy2GxKFPJEg joinedBy=p_s54KAkRWQ6c
+app-1  | INFO game over roomId=r_scdg6IWC12g players=2
+app-1  | INFO player disconnected playerId=p_B5DjyHHdEQ8 roomId=r_BoCRAbA6q1g
+
+# 优雅降级实证（首轮启动 redis 尚未就绪时的真实日志）：
+app-1  | WARN store: redis unreachable, falling back to in-memory addr=redis:6379
+       err="dial tcp: lookup redis ...: connection refused"
+app-1  | INFO gomoku-battle backend listening port=8080 ...
+
+$ docker compose down   # 取证后已清理
