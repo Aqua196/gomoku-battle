@@ -97,6 +97,7 @@ type Hub struct {
 	gamesPlayed atomic.Int64
 
 	sweepStop chan struct{}
+	rlDirty   bool // pending lobby room_list broadcast (coalesced flush)
 }
 
 // New builds a hub around a Store and an injected timing config and starts
@@ -111,6 +112,9 @@ func New(st store.Store, cfg protocol.Config) *Hub {
 	}
 	if cfg.SweepInterval > 0 {
 		go h.sweepLoop()
+	}
+	if cfg.RoomListFlush > 0 {
+		go h.roomListFlushLoop()
 	}
 	return h
 }
@@ -229,12 +233,46 @@ func (h *Hub) roomListMsgLocked() *protocol.RoomListMsg {
 	return msg
 }
 
-// broadcastRoomList pushes the full list to all lobby players (PROTOCOL §2).
+// broadcastRoomList marks the lobby list dirty; RoomListFlush>0 coalesces
+// bursts of mutations into one render+push per interval, else it pushes
+// immediately (zero: the synchronous path tests rely on).
 func (h *Hub) broadcastRoomList() {
 	h.mu.Lock()
+	h.rlDirty = true
+	if h.cfg.RoomListFlush > 0 {
+		h.mu.Unlock()
+		return
+	}
 	msg := h.roomListMsgLocked()
 	conns := h.lobbyConnsLocked()
 	h.mu.Unlock()
+	h.pushRoomList(msg, conns)
+}
+
+// roomListFlushLoop emits at most one lobby broadcast per RoomListFlush.
+func (h *Hub) roomListFlushLoop() {
+	ticker := time.NewTicker(h.cfg.RoomListFlush)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-h.sweepStop:
+			return
+		case <-ticker.C:
+			h.mu.Lock()
+			if !h.rlDirty {
+				h.mu.Unlock()
+				continue
+			}
+			h.rlDirty = false
+			msg := h.roomListMsgLocked()
+			conns := h.lobbyConnsLocked()
+			h.mu.Unlock()
+			h.pushRoomList(msg, conns)
+		}
+	}
+}
+
+func (h *Hub) pushRoomList(msg *protocol.RoomListMsg, conns []Conn) {
 	data := protocol.Marshal(msg)
 	for _, c := range conns {
 		if !c.SendRoomList(data) {
