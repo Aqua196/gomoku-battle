@@ -107,6 +107,9 @@ type Config struct {
 	// their reconnect windows (PROTOCOL §5: verdict suspended until a
 	// reconnect; abandoned games die on this TTL).
 	AbandonTTL time.Duration
+	// AIThink caps the AI driver's per-move budget; zero means each
+	// difficulty preset's default (PROTOCOL §8: <= 2s per move).
+	AIThink time.Duration
 }
 
 // DefaultConfig returns the production constants from PROTOCOL §6.
@@ -122,6 +125,7 @@ func DefaultConfig() Config {
 		SessionTTL:      5 * time.Minute,
 		SweepInterval:   60 * time.Second,
 		AbandonTTL:      10 * time.Minute,
+		AIThink:         0,
 	}
 }
 

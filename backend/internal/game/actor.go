@@ -39,6 +39,10 @@ type Actor struct {
 	mailbox chan func()
 	done    chan struct{}
 
+	// observer is an optional post-state-change hook (the AI driver uses
+	// it); invoked inside the actor goroutine, so it must not block.
+	observer func(*protocol.GameState)
+
 	board      Board
 	turn       Color
 	moveNumber int
@@ -73,6 +77,13 @@ func New(roomID string, black, white Seat, cfg protocol.Config, send SendFunc, o
 
 // Start launches the actor goroutine; game_start is its first emission.
 func (a *Actor) Start() { go a.run() }
+
+// SetObserver installs the state-change hook before Start.
+func (a *Actor) SetObserver(fn func(*protocol.GameState)) { a.observer = fn }
+
+// Done exposes the actor's completion channel for lifecycle-bound helpers
+// (e.g. the AI driver exits when the game ends).
+func (a *Actor) Done() <-chan struct{} { return a.done }
 
 // Move queues a stone-placement attempt by playerID at (x,y).
 func (a *Actor) Move(playerID string, x, y int) {
@@ -257,6 +268,7 @@ func (a *Actor) applyMove(playerID string, x, y int) {
 		a.turn = c.Other()
 		a.turnDL = time.Now().Add(a.cfg.MoveTimeout)
 		a.broadcast(&protocol.GameStateMsg{Type: protocol.TGameState, Game: a.snapshot()})
+		a.notify()
 	}
 }
 
@@ -389,6 +401,14 @@ func (a *Actor) finish(winner Color, reason string) {
 		Winner: winnerName,
 		Game:   a.snapshot(),
 	})
+	a.notify()
+}
+
+// notify reports the newest state to the observer, if any (AI driver).
+func (a *Actor) notify() {
+	if a.observer != nil {
+		a.observer(a.snapshot())
+	}
 }
 
 // ------------------------------------------------------------------ helpers
@@ -400,6 +420,7 @@ func (a *Actor) sendGameStart() {
 	a.send(a.seat(White).PlayerID, protocol.Marshal(&protocol.GameStartMsg{
 		Type: protocol.TGameStart, Game: a.snapshot(), YouColor: protocol.ColorWhite,
 	}))
+	a.notify()
 }
 
 func (a *Actor) broadcast(msg any) {
