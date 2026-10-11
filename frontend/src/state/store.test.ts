@@ -228,6 +228,59 @@ describe('store reducer', () => {
     expect(s.game.over).toBeNull()
   })
 
+  it('R1/R2: game_state re-syncs presence fields from the snapshot', () => {
+    let s = welcomed()
+    s = srv(s, { type: 'game_start', game: game(), youColor: 'black' })
+
+    // Snapshot carries an offline opponent + forfeit deadline → view syncs
+    // even without a preceding opponent_presence frame.
+    const dropped = game({
+      reconnectDeadline: 1730000099000,
+      players: {
+        black: { playerId: 'p_me', nick: 'me', connected: true, isAI: false },
+        white: { playerId: 'p_op', nick: 'op', connected: false, isAI: false },
+      },
+    })
+    s = srv(s, { type: 'game_state', game: dropped })
+    expect(s.game.opponentConnected).toBe(false)
+    expect(s.game.opponentDeadline).toBe(1730000099000)
+
+    // Opponent back online in the next snapshot → banner heals itself.
+    const back = game({
+      players: {
+        black: { playerId: 'p_me', nick: 'me', connected: true, isAI: false },
+        white: { playerId: 'p_op', nick: 'op', connected: true, isAI: false },
+      },
+    })
+    s = srv(s, { type: 'game_state', game: back })
+    expect(s.game.opponentConnected).toBe(true)
+    expect(s.game.opponentDeadline).toBeNull()
+    expect(s.game.opponentReconnectedAt).not.toBeNull()
+  })
+
+  it('R1/R2: game_over also refreshes presence fields', () => {
+    let s = welcomed()
+    s = srv(s, { type: 'game_start', game: game(), youColor: 'white' })
+    const fin = game({
+      status: 'finished',
+      winner: 'black',
+      winReason: 'disconnect_timeout',
+      reconnectDeadline: 1730000010000,
+      players: {
+        black: { playerId: 'p_op', nick: 'op', connected: false, isAI: false },
+        white: { playerId: 'p_me', nick: 'me', connected: true, isAI: false },
+      },
+    })
+    s = srv(s, {
+      type: 'game_over',
+      reason: 'disconnect_timeout',
+      winner: 'black',
+      game: fin,
+    })
+    expect(s.game.opponentConnected).toBe(false)
+    expect(s.game.over).toEqual({ reason: 'disconnect_timeout', winner: 'black' })
+  })
+
   it('opponent_presence drives the disconnect banner', () => {
     let s = welcomed()
     s = srv(s, { type: 'game_start', game: game(), youColor: 'black' })

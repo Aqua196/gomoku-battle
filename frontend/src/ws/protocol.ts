@@ -16,7 +16,14 @@ export type Board = Cell[][]
 
 export type RoomStatus = 'waiting' | 'playing' | 'finished'
 export type GameStatus = 'playing' | 'finished'
-export type GameOverReason = 'five' | 'draw' | 'timeout' | 'resign' | 'disconnect_timeout'
+/** §3: winner:null is legal for draw | abandoned (both players timed out). */
+export type GameOverReason =
+  | 'five'
+  | 'draw'
+  | 'timeout'
+  | 'resign'
+  | 'disconnect_timeout'
+  | 'abandoned'
 export type Difficulty = 'easy' | 'normal' | 'hard'
 export type MatchmakingStatus = 'queued' | 'cancelled'
 export type RoomAction = 'created' | 'joined' | 'left'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aiBadgeLabel, aiOpponent, isAiThinking } from './ai'
+import { aiBadgeLabel, aiOpponent, aiSeatColor, isAiThinking } from './ai'
 import type { GamePlayer, GameState } from '../ws/protocol'
 
 const aiP = (nick: string): GamePlayer => ({
@@ -74,15 +74,27 @@ describe('aiBadgeLabel', () => {
 describe('isAiThinking', () => {
   it('true while the turn belongs to the AI seat', () => {
     // I am black; after my move game.turn = white (AI).
-    expect(isAiThinking(game({ turn: 'white' }), aiP('AI (normal)'), 'black', false)).toBe(true)
+    expect(isAiThinking(game({ turn: 'white' }), false)).toBe(true)
+  })
+
+  it('does not depend on youColor being known (R9 edge)', () => {
+    // Derives from the AI seat color, so a not-yet-derived youColor
+    // cannot downgrade the wording to 对手思考中.
+    const flipped = game({
+      turn: 'black',
+      players: { black: aiP('AI (easy)'), white: human('p_me', 'me') },
+    })
+    expect(aiSeatColor(flipped)).toBe('black')
+    expect(isAiThinking(flipped, false)).toBe(true)
   })
 
   it('false on my turn, when finished/over, or vs humans', () => {
-    const ai = aiP('AI (normal)')
-    expect(isAiThinking(game({ turn: 'black' }), ai, 'black', false)).toBe(false)
-    expect(isAiThinking(game({ status: 'finished' }), ai, 'black', false)).toBe(false)
-    expect(isAiThinking(game({ turn: 'white' }), ai, 'black', true)).toBe(false)
-    expect(isAiThinking(game({ turn: 'white' }), human('p', 'bob'), 'black', false)).toBe(false)
-    expect(isAiThinking(game({ turn: 'white' }), ai, null, false)).toBe(false)
+    expect(isAiThinking(game({ turn: 'black' }), false)).toBe(false)
+    expect(isAiThinking(game({ status: 'finished' }), false)).toBe(false)
+    expect(isAiThinking(game({ turn: 'white' }), true)).toBe(false)
+    const pvp = game({
+      players: { black: human('p_a', 'a'), white: human('p_b', 'b') },
+    })
+    expect(isAiThinking(pvp, false)).toBe(false)
   })
 })
