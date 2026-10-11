@@ -1,0 +1,187 @@
+// Package wsclient is a programmable websocket client shared by the e2e
+// tests and cmd/wsclient (reused for M3 load generation).
+//
+// A pump goroutine reads the socket without deadlines and feeds a channel,
+// so a client-side read timeout never poisons the connection the way a
+// gorilla read-deadline timeout does (a timed-out read leaves gorilla's
+// parser mid-frame and latches the error onto all later reads).
+package wsclient
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/gorilla/websocket"
+)
+
+type readResult struct {
+	m   map[string]any
+	err error
+}
+
+// Client is a single websocket connection with a buffered inbound queue.
+type Client struct {
+	conn     *websocket.Conn
+	incoming chan readResult
+	mu       sync.Mutex
+	pending  []map[string]any
+}
+
+// Dial connects to a ws:// or http(s):// URL. Extra headers are optional.
+func Dial(rawurl string, header http.Header) (*Client, error) {
+	return DialOpts(rawurl, header, false)
+}
+
+// DialOpts connects like Dial and optionally suppresses pong replies to
+// server pings (gorilla requires handlers be installed before the first
+// read, so this is a dial-time option, not a later mutation).
+func DialOpts(rawurl string, header http.Header, suppressPong bool) (*Client, error) {
+	u := rawurl
+	u = strings.Replace(u, "https://", "wss://", 1)
+	u = strings.Replace(u, "http://", "ws://", 1)
+	parsed, err := url.Parse(u)
+	if err != nil {
+		return nil, err
+	}
+	conn, _, err := websocket.DefaultDialer.Dial(parsed.String(), header)
+	if err != nil {
+		return nil, err
+	}
+	if suppressPong {
+		conn.SetPingHandler(func(string) error { return nil })
+	}
+	c := &Client{conn: conn, incoming: make(chan readResult, 256)}
+	go c.pump()
+	return c, nil
+}
+
+// pump owns the socket read path: exactly one reader, no deadlines.
+func (c *Client) pump() {
+	for {
+		_, data, err := c.conn.ReadMessage()
+		if err != nil {
+			c.incoming <- readResult{err: err}
+			return
+		}
+		var m map[string]any
+		if err := json.Unmarshal(data, &m); err != nil {
+			c.incoming <- readResult{err: fmt.Errorf("wsclient: non-JSON frame: %w", err)}
+			continue
+		}
+		c.incoming <- readResult{m: m}
+	}
+}
+
+// Send writes a JSON object.
+func (c *Client) Send(v any) error {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	return c.conn.WriteMessage(websocket.TextMessage, data)
+}
+
+// SendMap is Send for a map literal.
+func (c *Client) SendMap(m map[string]any) error { return c.Send(m) }
+
+// SendRaw writes raw text (for malformed-frame tests).
+func (c *Client) SendRaw(s string) error {
+	return c.conn.WriteMessage(websocket.TextMessage, []byte(s))
+}
+
+// Hello performs the hello handshake and returns the welcome frame.
+func (c *Client) Hello(nick, token string) (map[string]any, error) {
+	msg := map[string]any{"type": "hello", "nick": nick}
+	if token != "" {
+		msg["token"] = token
+	}
+	if err := c.Send(msg); err != nil {
+		return nil, err
+	}
+	return c.WaitType("welcome", 5*time.Second)
+}
+
+// Read returns the next received frame. Buffered frames from WaitType
+// peeking are delivered first.
+func (c *Client) Read(timeout time.Duration) (map[string]any, error) {
+	c.mu.Lock()
+	if len(c.pending) > 0 {
+		m := c.pending[0]
+		c.pending = c.pending[1:]
+		c.mu.Unlock()
+		return m, nil
+	}
+	c.mu.Unlock()
+	return c.readIncoming(timeout)
+}
+
+// readIncoming waits for the next pumped frame, ignoring pending.
+func (c *Client) readIncoming(timeout time.Duration) (map[string]any, error) {
+	select {
+	case rr := <-c.incoming:
+		return rr.m, rr.err
+	case <-time.After(timeout):
+		return nil, errors.New("wsclient: read timeout")
+	}
+}
+
+// WaitType reads frames until one of the wanted type arrives. Already
+// buffered (skipped) frames are scanned first; new non-matching frames are
+// buffered for later Read calls. Returns the matched frame.
+func (c *Client) WaitType(want string, timeout time.Duration) (map[string]any, error) {
+	deadline := time.Now().Add(timeout)
+	for {
+		c.mu.Lock()
+		found := -1
+		for i, m := range c.pending {
+			if m["type"] == want {
+				found = i
+				break
+			}
+		}
+		if found >= 0 {
+			m := c.pending[found]
+			c.pending = append(c.pending[:found], c.pending[found+1:]...)
+			c.mu.Unlock()
+			return m, nil
+		}
+		c.mu.Unlock()
+
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return nil, errors.New("wsclient: timeout waiting for " + want)
+		}
+		m, err := c.readIncoming(remaining)
+		if err != nil {
+			return nil, err
+		}
+		if m["type"] == want {
+			return m, nil
+		}
+		c.mu.Lock()
+		c.pending = append(c.pending, m)
+		c.mu.Unlock()
+	}
+}
+
+// Collect drains frames for up to timeout and returns them in order.
+func (c *Client) Collect(timeout time.Duration) []map[string]any {
+	var out []map[string]any
+	deadline := time.Now().Add(timeout)
+	for {
+		m, err := c.Read(time.Until(deadline))
+		if err != nil {
+			return out
+		}
+		out = append(out, m)
+	}
+}
+
+// Close terminates the socket.
+func (c *Client) Close() { _ = c.conn.Close() }
