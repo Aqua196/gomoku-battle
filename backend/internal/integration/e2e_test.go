@@ -32,6 +32,9 @@ func fastCfg() protocol.Config {
 		MoveTimeout:     250 * time.Millisecond,
 		ReconnectWindow: 400 * time.Millisecond,
 		SendBuf:         64,
+		SessionTTL:      300 * time.Millisecond,
+		SweepInterval:   50 * time.Millisecond,
+		AbandonTTL:      600 * time.Millisecond,
 	}
 }
 
@@ -39,7 +42,7 @@ func newTestServer(t *testing.T, cfg protocol.Config) (*httptest.Server, *hub.Hu
 	t.Helper()
 	st := store.NewMemStore()
 	h := hub.New(st, cfg)
-	srv := ws.NewServer(h, cfg)
+	srv := ws.NewServer(h, cfg, true)
 	ts := httptest.NewServer(srv.Handler("", false))
 	t.Cleanup(ts.Close)
 	return ts, h
@@ -476,7 +479,7 @@ func TestMatchmakeRequiresLobby(t *testing.T) {
 	if err := a.SendMap(map[string]any{"type": "matchmake"}); err != nil {
 		t.Fatal(err)
 	}
-	expectErr(t, a, protocol.ENotInLobby)
+	expectErr(t, a, protocol.EAlreadyInRoom)
 }
 
 func TestPlayAINotImplemented(t *testing.T) {
@@ -876,32 +879,25 @@ func TestConcurrent100Rooms(t *testing.T) {
 		}
 		players = append(players, c)
 	}
-	// Pair sequentially: 200 instant matchmakes would burst ~100 room_list
-	// broadcasts per conn and trip the 64-frame slow-consumer kick — that is
-	// protocol-correct behavior, so pace the pairings. The 100 games then
-	// run truly concurrently.
+	// All 200 matchmakes fire at once: every pairing bursts room_list
+	// pushes at every lobby conn. The per-conn merge (R3) keeps only the
+	// newest snapshot, so no healthy client trips the slow-consumer kick.
 	type starter struct {
 		c     *wsclient.Client
 		first map[string]any
 	}
+	for _, c := range players {
+		if err := c.SendMap(map[string]any{"type": "matchmake"}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	starters := make([]starter, 0, pairs*2)
-	for i := 0; i < pairs; i++ {
-		a, b := players[2*i], players[2*i+1]
-		if err := a.SendMap(map[string]any{"type": "matchmake"}); err != nil {
-			t.Fatal(err)
-		}
-		if err := b.SendMap(map[string]any{"type": "matchmake"}); err != nil {
-			t.Fatal(err)
-		}
-		ga, err := a.WaitType("game_start", 15*time.Second)
+	for _, c := range players {
+		gs, err := c.WaitType("game_start", 30*time.Second)
 		if err != nil {
-			t.Fatalf("pair %d: A game_start: %v", i, err)
+			t.Fatalf("game_start: %v", err)
 		}
-		gb, err := b.WaitType("game_start", 15*time.Second)
-		if err != nil {
-			t.Fatalf("pair %d: B game_start: %v", i, err)
-		}
-		starters = append(starters, starter{a, ga}, starter{b, gb})
+		starters = append(starters, starter{c, gs})
 	}
 
 	started := 0

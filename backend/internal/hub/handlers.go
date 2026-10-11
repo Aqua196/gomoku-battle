@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"time"
 	"unicode/utf8"
 
 	"github.com/Aqua196/gomoku-battle/backend/internal/game"
@@ -26,6 +27,7 @@ func (h *Hub) PlayerDisconnected(p *Player, c Conn) {
 		return // stale conn from a superseded session
 	}
 	p.conn = nil
+	p.disconnectedAt = time.Now()
 	h.dequeueLocked(p)
 	switch p.state {
 	case StateWaiting:
@@ -64,6 +66,7 @@ func (h *Hub) Hello(c Conn, nick, token string) (*Player, bool, string) {
 	var p *Player
 	resumed := false
 
+	var stale Conn
 	h.mu.Lock()
 	if token != "" {
 		if rec, ok := h.store.PlayerByToken(token); ok {
@@ -74,10 +77,12 @@ func (h *Hub) Hello(c Conn, nick, token string) (*Player, bool, string) {
 				h.players[rec.PlayerID] = p
 			}
 			if p.conn != nil {
-				h.mu.Unlock()
-				return nil, false, protocol.EUnauthorized
+				// Takeover (PROTOCOL §1): the token is the credential, so a
+				// new connection with it wins — kill the old one and bind.
+				stale = p.conn
 			}
 			p.conn = c
+			p.disconnectedAt = time.Time{}
 			if rec.Nick != nick {
 				h.store.UpdateNick(rec.PlayerID, nick)
 			}
@@ -97,6 +102,9 @@ func (h *Hub) Hello(c Conn, nick, token string) (*Player, bool, string) {
 		h.players[rec.PlayerID] = p
 	}
 	h.mu.Unlock()
+	if stale != nil {
+		stale.Close() // kicked conn's PlayerDisconnected sees p.conn!=it and no-ops
+	}
 	return p, resumed, ""
 }
 
@@ -132,7 +140,7 @@ func (h *Hub) CreateRoom(p *Player, name string) {
 		h.replyErr(p, protocol.EAlreadyInRoom, "leave your current room first")
 		return
 	}
-	h.dequeueLocked(p)
+	dequeued := h.dequeueLocked(p)
 	id := randID("r", 8)
 	e = &roomEntry{meta: store.RoomRecord{
 		ID:        id,
@@ -148,6 +156,9 @@ func (h *Hub) CreateRoom(p *Player, name string) {
 	room := protoRoomLocked(e)
 	h.mu.Unlock()
 
+	if dequeued {
+		h.reply(p, protocol.NewMatchmaking(protocol.MatchCancelled, 0))
+	}
 	h.reply(p, protocol.NewRoomAction(protocol.RoomCreated, &room))
 	h.broadcastRoomList()
 }
@@ -173,13 +184,16 @@ func (h *Hub) JoinRoom(p *Player, roomID string) {
 		h.replyErr(p, protocol.ERoomFull, "room is full")
 		return
 	}
-	h.dequeueLocked(p)
+	dequeued := h.dequeueLocked(p)
 	e.seats[1] = p
 	p.roomID = roomID
 	actor = h.startGameLocked(e)
 	room := protoRoomLocked(e)
 	h.mu.Unlock()
 
+	if dequeued {
+		h.reply(p, protocol.NewMatchmaking(protocol.MatchCancelled, 0))
+	}
 	for _, s := range e.seats {
 		if s != nil {
 			h.reply(s, protocol.NewRoomAction(protocol.RoomJoined, &room))
@@ -213,7 +227,7 @@ func (h *Hub) LeaveRoom(p *Player) {
 	actor := e.actor
 	h.mu.Unlock()
 
-	h.reply(p, protocol.NewRoomLeft(roomID))
+	// Playing leave = resign (D3); game_over carries the news (R12).
 	if actor != nil {
 		actor.Resign(p.ID())
 	}
@@ -235,7 +249,7 @@ func (h *Hub) Matchmake(p *Player) {
 	h.mu.Lock()
 	if p.roomID != "" {
 		h.mu.Unlock()
-		h.replyErr(p, protocol.ENotInLobby, "finish your current game first")
+		h.replyErr(p, protocol.EAlreadyInRoom, "finish your current game first")
 		return
 	}
 	if !p.queued {
@@ -255,11 +269,13 @@ func (h *Hub) Matchmake(p *Player) {
 	}
 	h.mu.Unlock()
 
-	h.reply(p, protocol.NewMatchmaking(protocol.MatchQueued, position))
 	if actor != nil {
+		// Paired: game_start alone carries the news; no stale queued reply.
 		h.broadcastRoomList()
 		actor.Start()
+		return
 	}
+	h.reply(p, protocol.NewMatchmaking(protocol.MatchQueued, position))
 }
 
 // MatchmakeCancel removes the caller from the queue; idempotent.
@@ -275,6 +291,12 @@ func (h *Hub) MatchmakeCancel(p *Player) {
 func (h *Hub) PlayAI(p *Player, difficulty string) {
 	switch difficulty {
 	case "easy", "normal", "hard":
+		h.mu.Lock()
+		dequeued := h.dequeueLocked(p)
+		h.mu.Unlock()
+		if dequeued {
+			h.reply(p, protocol.NewMatchmaking(protocol.MatchCancelled, 0))
+		}
 		h.replyErr(p, protocol.ENotImplemented, "AI opponents arrive in M2")
 	default:
 		h.replyErr(p, protocol.EInvalidDifficulty, "difficulty must be easy|normal|hard")
