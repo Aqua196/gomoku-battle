@@ -1,0 +1,16 @@
+$ python3 e2e_m1.py   # 两个真实浏览器上下文(playwright CDP 隔离会话)
+[e2e] Alice in lobby
+[e2e] Bob in lobby
+[e2e] colors: black white
+[e2e] black played (7,7) / white (14,7) / black (8,7) / white (14,8) / black (9,7) / white (14,9) / black (10,7) / white (14,10) / black (11,7)
+[e2e] overlay on A: "你赢了！五连获胜 / 返回大厅"
+[e2e] metrics: {"connections":2,"lobbyPlayers":2,"rooms":0,"activeGames":0,"gamesPlayed":1}
+[e2e] E2E PASS: full game played to game_over in real browsers
+
+$ python3 reconnect live check (websocket-client)
+A color: black / B color: white ; black move accepted
+B 断线 -> A 收 opponent_presence{connected:false, deadline:1791748773874}
+B 用 token 重连 -> welcome{resumed:true} + game_state(board[7][7]==1, moveNumber=1)
+A 收 opponent_presence{connected:true, deadline:null}
+B resign -> game_over{reason:resign, winner:black}
+RECONNECT LIVE-CHECK PASS

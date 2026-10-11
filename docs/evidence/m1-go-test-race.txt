@@ -1,0 +1,10 @@
+$ go test -race ./...
+?   	github.com/Aqua196/gomoku-battle/backend/cmd/server	[no test files]
+?   	github.com/Aqua196/gomoku-battle/backend/cmd/wsclient	[no test files]
+ok  	github.com/Aqua196/gomoku-battle/backend/internal/game	(cached)
+?   	github.com/Aqua196/gomoku-battle/backend/internal/hub	[no test files]
+ok  	github.com/Aqua196/gomoku-battle/backend/internal/integration	(cached)
+?   	github.com/Aqua196/gomoku-battle/backend/internal/protocol	[no test files]
+?   	github.com/Aqua196/gomoku-battle/backend/internal/store	[no test files]
+?   	github.com/Aqua196/gomoku-battle/backend/internal/ws	[no test files]
+?   	github.com/Aqua196/gomoku-battle/backend/internal/wsclient	[no test files]
