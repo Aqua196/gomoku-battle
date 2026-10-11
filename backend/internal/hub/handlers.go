@@ -63,7 +63,7 @@ func (h *Hub) PlayerDisconnected(p *Player, c Conn) {
 // It deliberately does NOT notify the game actor: the caller must deliver
 // welcome first and only then call ResumeGame, so the client's frame order
 // is welcome -> game_state (PROTOCOL §1).
-func (h *Hub) Hello(c Conn, nick, token string) (*Player, bool, string) {
+func (h *Hub) Hello(c Conn, nick, token string) (*Player, bool) {
 	var p *Player
 	resumed := false
 
@@ -106,7 +106,7 @@ func (h *Hub) Hello(c Conn, nick, token string) (*Player, bool, string) {
 	if stale != nil {
 		stale.Close() // kicked conn's PlayerDisconnected sees p.conn!=it and no-ops
 	}
-	return p, resumed, ""
+	return p, resumed
 }
 
 // ResumeGame posts a reconnect event to the player's live game actor, if

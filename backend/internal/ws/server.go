@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -95,6 +96,14 @@ func spaHandler(dir string) http.Handler {
 			fs.ServeHTTP(w, r)
 			return
 		}
+		// Missing file: index.html only for navigation requests (extension-
+		// less route or Accept: text/html); /assets/* and other real files
+		// get an honest 404 instead of HTML masquerading as the asset.
+		nav := filepath.Ext(clean) == "" || strings.Contains(r.Header.Get("Accept"), "text/html")
+		if !nav || strings.HasPrefix(clean, "/assets/") {
+			http.NotFound(w, r)
+			return
+		}
 		http.ServeFile(w, r, filepath.Join(dir, "index.html"))
 	})
 }
@@ -173,15 +182,12 @@ func (sess *session) handleHello(data []byte) {
 		}
 		return // unknown types are ignored per PROTOCOL §0
 	}
-	if n := utf8.RuneCountInString(in.Nick); n < 1 || n > 32 {
-		sess.sendErr(protocol.EBadRequest, "nick must be 1-32 characters")
+	nick := strings.TrimSpace(in.Nick)
+	if n := utf8.RuneCountInString(nick); n < 1 || n > 32 {
+		sess.sendErr(protocol.EInvalidNick, "nick must be 1-32 characters")
 		return
 	}
-	p, resumed, code := sess.srv.hub.Hello(sess.c, in.Nick, in.Token)
-	if code != "" {
-		sess.sendErr(code, "invalid or busy session token")
-		return
-	}
+	p, resumed := sess.srv.hub.Hello(sess.c, nick, in.Token)
 	sess.player = p
 	_ = sess.c.ws.SetReadDeadline(time.Now().Add(sess.srv.cfg.WSPongWait))
 	sess.send(protocol.NewWelcome(p.ID(), p.Token(), p.Nick(), resumed))

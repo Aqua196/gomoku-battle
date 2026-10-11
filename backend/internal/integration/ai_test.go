@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"runtime"
 	"testing"
 	"time"
 
@@ -181,4 +182,98 @@ func TestAIResign(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("metrics after AI resign: %+v", h.Metrics())
+}
+
+// TestAIQueuedFrameOrder: a queued player's play_ai must emit
+// matchmaking{cancelled} BEFORE game_start.
+func TestAIQueuedFrameOrder(t *testing.T) {
+	ts, _ := newTestServer(t, aiCfg(50*time.Millisecond))
+	a := dial(t, ts)
+	defer a.Close()
+	hello(t, a, "alice")
+	if err := a.SendMap(map[string]any{"type": "matchmake"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.WaitType("matchmaking", 2*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.SendMap(map[string]any{"type": "play_ai", "difficulty": "easy"}); err != nil {
+		t.Fatal(err)
+	}
+	m1, err := a.Read(2 * time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m1["type"] != "matchmaking" || m1["status"] != "cancelled" {
+		t.Fatalf("first frame = %v, want matchmaking{cancelled}", m1)
+	}
+	m2, err := a.Read(2 * time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m2["type"] != "game_start" {
+		t.Fatalf("second frame = %v, want game_start", m2)
+	}
+}
+
+// TestAIHumanDisconnectTimeout: the human's reconnect window still applies
+// in AI games; expiry forfeits the human and cleans the room.
+func TestAIHumanDisconnectTimeout(t *testing.T) {
+	cfg := aiCfg(30 * time.Millisecond)
+	cfg.ReconnectWindow = 150 * time.Millisecond
+	ts, h := newTestServer(t, cfg)
+	a := dial(t, ts)
+	w := hello(t, a, "alice")
+	if err := a.SendMap(map[string]any{"type": "play_ai", "difficulty": "easy"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.WaitType("game_start", 2*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	a.Close() // human vanishes; AI stays "connected"
+	_ = w
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		m := h.Metrics()
+		if m.GamesPlayed == 1 && m.ActiveGames == 0 && m.Rooms == 0 {
+			return // room cleaned, game counted
+		}
+		time.Sleep(15 * time.Millisecond)
+	}
+	t.Fatalf("game not cleaned after human timeout: %+v", h.Metrics())
+}
+
+// TestAIDriverNoLeak: after game_over the driver goroutine exits — total
+// goroutines fall back to (near) the pre-game baseline.
+func TestAIDriverNoLeak(t *testing.T) {
+	ts, _ := newTestServer(t, aiCfg(40*time.Millisecond))
+	a := dial(t, ts)
+	defer a.Close()
+	hello(t, a, "alice")
+	base := runtime.NumGoroutine()
+
+	if err := a.SendMap(map[string]any{"type": "play_ai", "difficulty": "hard"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.WaitType("game_start", 2*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.SendMap(map[string]any{"type": "move", "x": 7, "y": 7}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.SendMap(map[string]any{"type": "resign"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.WaitType("game_over", 2*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if runtime.NumGoroutine() <= base {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("goroutines after game_over = %d, baseline %d", runtime.NumGoroutine(), base)
 }

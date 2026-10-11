@@ -305,12 +305,13 @@ func (a *Actor) applyReconnect(playerID string) {
 	if !ok {
 		return
 	}
+	wasOffline := !a.seat(c).Connected // a takeover arrives still connected
 	a.seat(c).Connected = true
 	a.bothOfflineAt = time.Time{}
 	if a.status != protocol.RoomPlaying {
 		return
 	}
-	// R15/§5 double-disconnect settlement, evaluated on the reconnecting
+	// §5 double-disconnect settlement, evaluated on the reconnecting
 	// side's arrival: own window expired -> self loses; else opponent's
 	// window expired -> opponent loses; else play continues.
 	now := time.Now()
@@ -323,19 +324,29 @@ func (a *Actor) applyReconnect(playerID string) {
 		a.finish(c, protocol.ReasonDisconnectTimeout)
 		return
 	}
-	// Resuming player gets the full state; the opponent hears they are back.
+	// Resuming player gets the full state; then its presence view is made
+	// authoritative (§5): always told whether the opponent is online.
 	a.send(playerID, protocol.Marshal(&protocol.GameStateMsg{Type: protocol.TGameState, Game: a.snapshot()}))
-	a.send(a.seat(c.Other()).PlayerID, protocol.Marshal(&protocol.OpponentPresenceMsg{
-		Type:      protocol.TOpponentPresence,
-		Connected: true,
-		Deadline:  nil,
-	}))
-	// If the opponent is also offline, tell the returner about it too.
 	if dl, ok := a.reconAt[c.Other()]; ok {
 		a.send(playerID, protocol.Marshal(&protocol.OpponentPresenceMsg{
 			Type:      protocol.TOpponentPresence,
 			Connected: false,
 			Deadline:  protocol.Int64Ptr(dl.UnixMilli()),
+		}))
+	} else {
+		a.send(playerID, protocol.Marshal(&protocol.OpponentPresenceMsg{
+			Type:      protocol.TOpponentPresence,
+			Connected: true,
+			Deadline:  nil,
+		}))
+	}
+	// The opponent hears "back" only when this seat had actually been
+	// offline — a takeover must not emit a phantom reconnect frame.
+	if wasOffline {
+		a.send(a.seat(c.Other()).PlayerID, protocol.Marshal(&protocol.OpponentPresenceMsg{
+			Type:      protocol.TOpponentPresence,
+			Connected: true,
+			Deadline:  nil,
 		}))
 	}
 }
@@ -375,7 +386,7 @@ func (a *Actor) onAbandonTimeout() {
 	if a.status != protocol.RoomPlaying || !a.bothOffline() {
 		return
 	}
-	a.finish(Empty, protocol.ReasonDisconnectTimeout)
+	a.finish(Empty, protocol.ReasonAbandoned)
 }
 
 // bothOffline reports whether both seats are currently disconnected.
