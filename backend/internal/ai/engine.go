@@ -22,17 +22,19 @@ type Config struct {
 	Iterative bool          // iterative deepening until Think expires
 }
 
-// For returns the preset for a PROTOCOL §2 difficulty string.
+// For returns the preset for a PROTOCOL §2 difficulty string. An unknown
+// difficulty falls back to the normal preset (chosen over erroring: the hub
+// validates the string first, so a zero-value config could only arise from
+// an internal misuse and a sane default is strictly better).
 func For(difficulty string) Config {
 	switch difficulty {
 	case "easy":
 		return Config{MaxDepth: 2, Breadth: 6, NoisePct: 40, Think: 400 * time.Millisecond}
-	case "normal":
-		return Config{MaxDepth: 4, Breadth: 10, Think: 1200 * time.Millisecond}
 	case "hard":
 		return Config{MaxDepth: 64, Breadth: 14, Iterative: true, Think: 1800 * time.Millisecond}
+	default: // "normal" and any unknown value
+		return Config{MaxDepth: 4, Breadth: 10, Think: 1200 * time.Millisecond}
 	}
-	return Config{}
 }
 
 // Engine searches one board position.
@@ -41,6 +43,9 @@ type Engine struct {
 	rnd  *rand.Rand
 	dead time.Time
 	stop bool
+	// cancel aborts a move early when set (e.g. the actor's done channel —
+	// no point burning the think budget on a finished game).
+	cancel <-chan struct{}
 }
 
 // NewEngine builds an engine from a difficulty preset.
@@ -57,10 +62,17 @@ var patScore = [6]int{0, 8, 90, 1100, 16000, winScore}
 // false only when no legal cell exists. A forced win is played, a forced
 // opponent win is blocked — at every difficulty, before any search runs.
 func (e *Engine) Move(b *game.Board, me game.Color, deadline time.Time) (x, y int, ok bool) {
+	return e.MoveCancel(b, me, deadline, nil)
+}
+
+// MoveCancel is Move plus early abort on cancel: when the channel closes,
+// the search unwinds and the best move found so far is returned (ok=true
+// when at least one move exists, so the caller can ignore it).
+func (e *Engine) MoveCancel(b *game.Board, me game.Color, deadline time.Time, cancel <-chan struct{}) (x, y int, ok bool) {
 	if b == nil {
 		return 0, 0, false
 	}
-	e.dead, e.stop = deadline, false
+	e.dead, e.stop, e.cancel = deadline, false, cancel
 	think := time.Until(deadline)
 	if think > e.cfg.Think {
 		e.dead = time.Now().Add(e.cfg.Think)
@@ -89,19 +101,22 @@ func (e *Engine) Move(b *game.Board, me game.Color, deadline time.Time) (x, y in
 
 	maxDepth := e.cfg.MaxDepth
 	if !e.cfg.Iterative {
-		return e.rootSearch(b, me, cands, maxDepth)
+		// Single-iteration configs: a deadline abort still returns the
+		// partial best — there is no earlier complete iteration to keep.
+		mx, my, _ := e.rootSearch(b, me, cands, maxDepth)
+		return mx, my, true
 	}
 	// Iterative deepening: deepen until the deadline, keep the last
 	// completed iteration's answer.
 	best := cands[0]
 	for d := 1; d <= maxDepth; d++ {
 		mx, my, mok := e.rootSearch(b, me, cands, d)
-		if e.stop {
-			return best[0], best[1], true // truncated mid-iteration
+		if !mok {
+			// Deadline/cancel cut this iteration short: the partial result
+			// is discarded and the last completed best stands.
+			return best[0], best[1], true
 		}
-		if mok {
-			best = [2]int{mx, my}
-		}
+		best = [2]int{mx, my}
 		if e.expired() {
 			break
 		}
@@ -109,8 +124,22 @@ func (e *Engine) Move(b *game.Board, me game.Color, deadline time.Time) (x, y in
 	return best[0], best[1], true
 }
 
+// expired reports whether the search must unwind: budget spent, a previous
+// abort latched, or the cancel channel closed.
 func (e *Engine) expired() bool {
-	return e.stop || time.Now().After(e.dead)
+	if e.stop || time.Now().After(e.dead) {
+		e.stop = true
+		return true
+	}
+	if e.cancel != nil {
+		select {
+		case <-e.cancel:
+			e.stop = true
+			return true
+		default:
+		}
+	}
+	return false
 }
 
 // rootSearch runs one full-depth alpha-beta iteration and returns the best

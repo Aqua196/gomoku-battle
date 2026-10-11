@@ -57,6 +57,17 @@ func (d *Driver) Notify(gs *protocol.GameState) {
 	if gs.Status != protocol.RoomPlaying || gs.Turn != d.color {
 		return
 	}
+	// Keep only the newest: if the inbox is full, evict the stale state
+	// first, then enqueue — the driver never thinks on an obsolete board.
+	select {
+	case d.inbox <- gs:
+		return
+	default:
+	}
+	select {
+	case <-d.inbox:
+	default:
+	}
 	select {
 	case d.inbox <- gs:
 	default:
@@ -86,7 +97,9 @@ func (d *Driver) loop() {
 				me = game.White
 			}
 			b := boardFrom(gs)
-			x, y, ok := d.eng.Move(&b, me, time.Now().Add(d.think))
+			// Cancellable on actor done: a finished game must not burn the
+			// think budget.
+			x, y, ok := d.eng.MoveCancel(&b, me, time.Now().Add(d.think), d.done)
 			if ok {
 				d.mover.Move(d.aiID, x, y)
 			}
