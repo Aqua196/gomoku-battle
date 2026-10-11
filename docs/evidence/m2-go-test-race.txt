@@ -1,0 +1,6 @@
+ok  	github.com/Aqua196/gomoku-battle/backend/internal/ai	6.788s
+--- FAIL: TestConcurrent100Rooms (3.50s)
+    e2e_test.go:884: game_start: websocket: close 1006 (abnormal closure): unexpected EOF
+FAIL
+FAIL	github.com/Aqua196/gomoku-battle/backend/internal/integration	6.602s
+FAIL

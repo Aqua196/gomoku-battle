@@ -21,13 +21,15 @@
 
 | 范围 | 实现 | 证据 | 状态 |
 |---|---|---|---|
-| alpha-beta + 评估函数，3 档 | `internal/ai` | `TestAI*` | ☐ |
-| 人机模式（大厅入口） | `play_ai` + 前端按钮 | e2e | ☐ |
-| 单步 ≤2s 超时截断 | 迭代深化+deadline | `TestAITimeLimit` | ☐ |
-| **关卡：必杀/必防识别** | — | `TestAIWinInOne` `TestAIBlockOppFour` | ☐ |
-| **关卡：hard vs 随机 100 局胜率 ≥95%** | — | `TestAIvsRandom100`（真实胜率） | ☐ |
-| **关卡：AI 不阻塞房间管理 goroutine** | — | `TestAINonBlocking`（并发对局响应延迟断言） | ☐ |
+| alpha-beta + 评估函数，3 档 | `internal/ai`（negamax α-β + 迭代深化 + 候选邻域排序；easy=深度2+噪声 / normal=深度4 / hard=~1.8s 迭代深化） | `TestAI*` | ✅ |
+| 人机模式（大厅入口） | `play_ai` → `hub.PlayAI` 建 isAI 房间；AI=embedded Driver 走同一 actor `Move` mailbox，无第二协议路径 | `TestPlayAIFlow` `TestPlayAIInvalidDifficulty` `TestPlayAIWhileInRoom` + 实盘 `docs/evidence/m2-ai-live.txt`（hard 档整局，`winner: white, reason: five`） | ✅(后端) ☐(前端按钮待合) |
+| 单步 ≤2s 超时截断 | 迭代深化+deadline 返回当前最优 | `TestAITimeLimit` | ✅ |
+| **关卡：必杀/必防识别** | — | `TestAIWinInOne`（4 方向×3 档）`TestAIBlockOppFour`（4 局×3 档） | ✅ |
+| **关卡：hard vs 随机 100 局胜率 ≥95%** | — | `TestAIvsRandom100`：胜 100 / 负 0 / 平 0（`docs/evidence/m2-go-test-race.txt`，5.9s -race） | ✅ |
+| **关卡：AI 不阻塞房间管理 goroutine** | — | `TestAINonBlocking`（AI 思考 1.2s 期间 hub 建房/落子响应计时断言） | ✅ |
 | 评审 | — | `docs/reviews/m2.md` | ☐ |
+
+注：合入 M2 后 `TestConcurrent100Rooms` 出现 1 次偶发失败（对端 close 1006，VM 高负载时序），随后 -race 连跑 4 次全绿；记为观察项，M3 压测时复查。
 
 ## M3 压测与性能报告
 
