@@ -11,6 +11,7 @@ import (
 	"github.com/Aqua196/gomoku-battle/backend/internal/store"
 	"github.com/Aqua196/gomoku-battle/backend/internal/ws"
 	"github.com/Aqua196/gomoku-battle/backend/internal/wsclient"
+	"github.com/alicebob/miniredis/v2"
 )
 
 // R2: hello with a token that belongs to a still-online session takes the
@@ -223,5 +224,47 @@ func TestServerNowFields(t *testing.T) {
 	gs := ga["game"].(map[string]any)
 	if gs["serverNow"].(float64) <= 0 {
 		t.Fatalf("game_state.serverNow = %v", gs["serverNow"])
+	}
+}
+
+// M4-R1/R2 fix: an in-progress session resumes via the hub's in-memory
+// playersByToken index even if Redis goes down mid-game, and Store I/O runs
+// outside h.mu.
+func TestResumeSurvivesTransientStoreDown(t *testing.T) {
+	mr := miniredis.RunT(t)
+	st, err := store.NewRedisStore(mr.Addr())
+	if err != nil {
+		t.Fatalf("NewRedisStore: %v", err)
+	}
+	cfg := fastCfg()
+	cfg.ReconnectWindow = 2 * time.Second
+	cfg.MoveTimeout = 5 * time.Second
+	h := hub.New(st, cfg)
+	t.Cleanup(h.Stop)
+	srv := ws.NewServer(h, cfg, true)
+	ts := httptest.NewServer(srv.Handler("", false))
+	t.Cleanup(ts.Close)
+
+	a, b, wa, _, _, _ := startMatchGame(t, ts, "alice", "bob")
+	defer b.Close()
+
+	// Alice disconnects and Redis goes down before she reconnects.
+	a.Close()
+	if _, err := b.WaitType("opponent_presence", 2*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	mr.Close()
+
+	a2 := dial(t, ts)
+	defer a2.Close()
+	w2, err := a2.Hello("alice", wa["token"].(string))
+	if err != nil {
+		t.Fatalf("reconnect hello while redis down: %v", err)
+	}
+	if w2["resumed"] != true || w2["playerId"] != wa["playerId"] {
+		t.Fatalf("expected in-memory resume despite redis outage, got %v", w2)
+	}
+	if _, err := a2.WaitType("game_state", 2*time.Second); err != nil {
+		t.Fatalf("expected game_state after resume: %v", err)
 	}
 }

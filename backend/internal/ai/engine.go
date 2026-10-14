@@ -39,12 +39,10 @@ func For(difficulty string) Config {
 
 // Engine searches one board position.
 type Engine struct {
-	cfg  Config
-	rnd  *rand.Rand
-	dead time.Time
-	stop bool
-	// cancel aborts a move early when set (e.g. the actor's done channel —
-	// no point burning the think budget on a finished game).
+	cfg    Config
+	rnd    *rand.Rand
+	dead   time.Time
+	stop   bool
 	cancel <-chan struct{}
 }
 
@@ -81,6 +79,12 @@ func (e *Engine) MoveCancel(b *game.Board, me game.Color, deadline time.Time, ca
 		return mv[0], mv[1], true
 	}
 	if mv, found := e.winInOne(b, me.Other()); found {
+		return mv[0], mv[1], true
+	}
+	if mv, found := e.openFourInOne(b, me); found {
+		return mv[0], mv[1], true
+	}
+	if mv, found := e.openFourInOne(b, me.Other()); found {
 		return mv[0], mv[1], true
 	}
 	cands := e.candidates(b, me)
@@ -223,6 +227,28 @@ func (e *Engine) winInOne(b *game.Board, c game.Color) ([2]int, bool) {
 	return [2]int{}, false
 }
 
+// openFourInOne returns a cell that creates an unstoppable open four (.XXXX.)
+// for color c, if any.
+func (e *Engine) openFourInOne(b *game.Board, c game.Color) ([2]int, bool) {
+	for _, p := range e.candidates(b, c) {
+		if makesOpenFour(b, p[0], p[1], c) {
+			return p, true
+		}
+	}
+	return [2]int{}, false
+}
+
+func makesOpenFour(b *game.Board, x, y int, c game.Color) bool {
+	for _, d := range [4][2]int{{1, 0}, {0, 1}, {1, 1}, {1, -1}} {
+		fwd, openF := runLenAndOpen(b, x, y, d[0], d[1], c)
+		bwd, openB := runLenAndOpen(b, x, y, -d[0], -d[1], c)
+		if 1+fwd+bwd == 4 && openF && openB {
+			return true
+		}
+	}
+	return false
+}
+
 type scored struct {
 	p [2]int
 	s int
@@ -284,26 +310,77 @@ func (e *Engine) nearStone(b *game.Board, x, y int) bool {
 	return false
 }
 
-// pointScore rates placing color c at empty (x,y): the longest run it
-// completes through that cell on each axis, summed over all four.
+// pointScore rates placing color c at empty (x,y): distinguishes open-ended
+// live shapes (.XXXX., .XXX.), single-open rush/sleep shapes, dead boxed-in
+// lines (0 pts), and multi-axis fork combinations (four-three / double-three).
 func (e *Engine) pointScore(b *game.Board, x, y int, c game.Color) int {
 	total := 0
+	openThrees := 0
+	rushFours := 0
 	for _, d := range [4][2]int{{1, 0}, {0, 1}, {1, 1}, {1, -1}} {
-		n := 1 + runLen(b, x, y, d[0], d[1], c) + runLen(b, x, y, -d[0], -d[1], c)
+		fwd, openF := runLenAndOpen(b, x, y, d[0], d[1], c)
+		bwd, openB := runLenAndOpen(b, x, y, -d[0], -d[1], c)
+		n := 1 + fwd + bwd
 		if n >= 5 {
 			return winScore
 		}
-		total += patScore[n]
+		openEnds := 0
+		if openF {
+			openEnds++
+		}
+		if openB {
+			openEnds++
+		}
+		if openEnds == 0 {
+			continue // boxed in at both ends
+		}
+		switch n {
+		case 4:
+			if openEnds == 2 {
+				total += 120000
+			} else {
+				total += 18000
+				rushFours++
+			}
+		case 3:
+			if openEnds == 2 {
+				total += 9000
+				openThrees++
+			} else {
+				total += 900
+			}
+		case 2:
+			if openEnds == 2 {
+				total += 450
+			} else {
+				total += 60
+			}
+		case 1:
+			if openEnds == 2 {
+				total += 10
+			} else {
+				total += 2
+			}
+		}
+	}
+	if rushFours >= 2 || (rushFours >= 1 && openThrees >= 1) {
+		total += 80000
+	} else if openThrees >= 2 {
+		total += 40000
 	}
 	return total
 }
 
-func runLen(b *game.Board, x, y, dx, dy int, c game.Color) int {
+func runLenAndOpen(b *game.Board, x, y, dx, dy int, c game.Color) (int, bool) {
 	n := 0
-	for nx, ny := x+dx, y+dy; game.InBounds(nx, ny) && b[ny][nx] == c; nx, ny = nx+dx, ny+dy {
+	nx, ny := x+dx, y+dy
+	for game.InBounds(nx, ny) && b[ny][nx] == c {
 		n++
+		nx += dx
+		ny += dy
 	}
-	return n
+	open := game.InBounds(nx, ny) && b[ny][nx] == game.Empty
+	return n, open
 }
 
 // evalFor scores the whole board from me's perspective: my pattern sum minus
@@ -331,7 +408,8 @@ func (e *Engine) boardScore(b *game.Board, c game.Color) int {
 	return total
 }
 
-// lineScore walks one full line starting at (x,y) and slides 5-windows.
+// lineScore walks one full line starting at (x,y) and slides 5-windows,
+// adding open-shape bonuses for live threes (.XXX.) and live fours (.XXXX.).
 func (e *Engine) lineScore(b *game.Board, x, y, dx, dy int, c game.Color) int {
 	line := [game.BoardSize]game.Color{}
 	n := 0
@@ -351,6 +429,13 @@ func (e *Engine) lineScore(b *game.Board, x, y, dx, dy int, c game.Color) int {
 		}
 		if mine > 0 && opp == 0 {
 			total += patScore[mine]
+			if mine == 3 && line[i] == game.Empty && line[i+4] == game.Empty {
+				total += 3200
+			} else if mine == 4 &&
+				((line[i] == game.Empty && i+5 < n && line[i+5] == game.Empty) ||
+					(line[i+4] == game.Empty && i > 0 && line[i-1] == game.Empty)) {
+				total += 32000
+			}
 		}
 	}
 	return total

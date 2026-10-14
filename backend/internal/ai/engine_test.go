@@ -70,7 +70,7 @@ func TestAIBlockOppFour(t *testing.T) {
 		white  [][2]int
 		mustAt [2]int // the only blocking cell
 	}{
-		// X X X X . with left end blocked by edge -> only (10,7) works.
+		// X X X X . with left end blocked by edge -> only (4,7) works.
 		{"horizontal_edge", [][2]int{{0, 7}, {1, 7}, {2, 7}, {3, 7}}, [][2]int{{10, 10}, {11, 11}, {12, 12}}, [2]int{4, 7}},
 		// . X X X X with right end blocked by white -> only (7,5) works.
 		{"horizontal_blocked", [][2]int{{3, 5}, {4, 5}, {5, 5}, {6, 5}}, [][2]int{{8, 5}, {2, 2}}, [2]int{7, 5}},
@@ -97,6 +97,45 @@ func TestAIBlockOppFour(t *testing.T) {
 			})
 		}
 	}
+}
+
+// TestAIOpenThreeAndOpenFour: the engine must seize an immediate open-four
+// creation (.OOOO.) and must block an opponent's open three (.XXX.) before it
+// becomes an unstoppable open four.
+func TestAIOpenThreeAndOpenFour(t *testing.T) {
+	t.Run("create_open_four", func(t *testing.T) {
+		var b game.Board
+		// White has open three at (5,7),(6,7),(7,7); (4,7) and (8,7) both create .OOOO.
+		for _, s := range [][2]int{{5, 7}, {6, 7}, {7, 7}} {
+			place(&b, s[0], s[1], game.White)
+		}
+		place(&b, 2, 2, game.Black)
+		place(&b, 2, 3, game.Black)
+		x, y, ok := engine("normal", 200*time.Millisecond).Move(&b, game.White, time.Now().Add(time.Second))
+		if !ok {
+			t.Fatal("no move")
+		}
+		if (x != 4 || y != 7) && (x != 8 || y != 7) {
+			t.Fatalf("move (%d,%d) did not create open four at (4,7) or (8,7)", x, y)
+		}
+	})
+
+	t.Run("block_opp_open_three", func(t *testing.T) {
+		var b game.Board
+		// Black has open three at (5,7),(6,7),(7,7) with (4,7) and (8,7) open.
+		for _, s := range [][2]int{{5, 7}, {6, 7}, {7, 7}} {
+			place(&b, s[0], s[1], game.Black)
+		}
+		place(&b, 7, 6, game.White)
+		place(&b, 10, 10, game.White)
+		x, y, ok := engine("normal", 200*time.Millisecond).Move(&b, game.White, time.Now().Add(time.Second))
+		if !ok {
+			t.Fatal("no move")
+		}
+		if (x != 4 || y != 7) && (x != 8 || y != 7) {
+			t.Fatalf("move (%d,%d) did not block open three at (4,7) or (8,7)", x, y)
+		}
+	})
 }
 
 // TestAITimeLimit: a busy mid-game position must return within the budget.

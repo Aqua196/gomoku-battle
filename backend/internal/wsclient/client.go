@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -19,6 +20,8 @@ import (
 
 	"github.com/gorilla/websocket"
 )
+
+const defaultWriteWait = 10 * time.Second
 
 type readResult struct {
 	m   map[string]any
@@ -56,6 +59,18 @@ func DialOpts(rawurl string, header http.Header, suppressPong bool) (*Client, er
 	}
 	if suppressPong {
 		conn.SetPingHandler(func(string) error { return nil })
+	} else {
+		// Override gorilla's 1s defaultPingHandler writeWait so a busy test
+		// runner under -race never leaves a 1s write deadline on net.Conn.
+		conn.SetPingHandler(func(message string) error {
+			err := conn.WriteControl(websocket.PongMessage, []byte(message), time.Now().Add(defaultWriteWait))
+			if err == websocket.ErrCloseSent {
+				return nil
+			} else if e, ok := err.(net.Error); ok && e.Temporary() {
+				return nil
+			}
+			return err
+		})
 	}
 	c := &Client{conn: conn, incoming: make(chan readResult, 256)}
 	go c.pump()
@@ -92,14 +107,10 @@ func (c *Client) deliver(r readResult) {
 
 // Send writes a JSON object. A mutex serializes concurrent writers:
 // gorilla permits one writer at a time and interleaved frames corrupt.
+// Always refresh the write deadline so a prior WriteControl (pong) deadline
+// never leaks onto subsequent data frames.
 func (c *Client) Send(v any) error {
-	data, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	c.wmu.Lock()
-	defer c.wmu.Unlock()
-	return c.conn.WriteMessage(websocket.TextMessage, data)
+	return c.SendTimeout(v, defaultWriteWait)
 }
 
 // SendMap is Send for a map literal.
@@ -131,7 +142,10 @@ func (c *Client) SendMapTimeout(m map[string]any, d time.Duration) error {
 func (c *Client) SendRaw(s string) error {
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
-	return c.conn.WriteMessage(websocket.TextMessage, []byte(s))
+	_ = c.conn.SetWriteDeadline(time.Now().Add(defaultWriteWait))
+	err := c.conn.WriteMessage(websocket.TextMessage, []byte(s))
+	_ = c.conn.SetWriteDeadline(time.Time{})
+	return err
 }
 
 // Hello performs the hello handshake and returns the welcome frame.

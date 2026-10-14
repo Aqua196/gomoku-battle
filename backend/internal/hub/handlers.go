@@ -22,7 +22,7 @@ func (h *Hub) PlayerDisconnected(p *Player, c Conn) {
 		return
 	}
 	var actor *game.Actor
-	var roomDeleted bool
+	var deletedRoomID string
 	h.mu.Lock()
 	if p.conn != c {
 		h.mu.Unlock()
@@ -35,12 +35,11 @@ func (h *Hub) PlayerDisconnected(p *Player, c Conn) {
 	switch p.state {
 	case StateWaiting:
 		if e := h.rooms[p.roomID]; e != nil {
-			delete(h.rooms, e.meta.ID)
-			h.store.DeleteRoom(e.meta.ID)
+			deletedRoomID = e.meta.ID
+			delete(h.rooms, deletedRoomID)
 		}
 		p.roomID = ""
 		p.state = StateLobby
-		roomDeleted = true
 	case StatePlaying:
 		if e := h.rooms[p.roomID]; e != nil {
 			actor = e.actor
@@ -53,64 +52,97 @@ func (h *Hub) PlayerDisconnected(p *Player, c Conn) {
 	if actor != nil {
 		actor.Disconnect(p.ID())
 	}
-	if roomDeleted {
+	if deletedRoomID != "" {
+		h.syncRoomStore(deletedRoomID)
 		h.broadcastRoomList()
 	}
 }
 
+// bindResumedLocked attaches conn c to an existing runtime Player session
+// (handling takeover if a previous conn is still present) and returns the
+// displaced conn (if any) plus whether the display nick changed. Caller
+// holds h.mu.
+func (h *Hub) bindResumedLocked(p *Player, c Conn, nick string) (stale Conn, nickChanged bool) {
+	if p.conn != nil {
+		// Takeover (PROTOCOL §1): the token is the credential, so a
+		// new connection with it wins — kill the old one and bind.
+		stale = p.conn
+	}
+	p.conn = c
+	p.disconnectedAt = time.Time{}
+	if p.rec.Nick != nick {
+		p.rec.Nick = nick
+		nickChanged = true
+	}
+	// Sanitize a stale room reference: e.g. the game ended while
+	// the player was offline, or a waiting room was deleted.
+	if p.state != StateLobby && h.rooms[p.roomID] == nil {
+		p.state, p.roomID = StateLobby, ""
+	}
+	slog.Info("player resumed", "playerId", p.ID(), "roomId", p.roomID)
+	return stale, nickChanged
+}
+
 // Hello binds a conn to a session: a fresh player, or a resumed one when the
 // token matches a disconnected session (PROTOCOL §1). Returns the bound
-// player, whether this was a resume, and an error code ("" on success).
+// player and whether this was a resume.
 //
-// It deliberately does NOT notify the game actor: the caller must deliver
-// welcome first and only then call ResumeGame, so the client's frame order
-// is welcome -> game_state (PROTOCOL §1).
+// All Store I/O runs outside h.mu so a slow or unreachable Redis can never
+// freeze the hub, while the authoritative in-memory playersByToken index is
+// consulted first so transient Redis faults never drop active sessions.
 func (h *Hub) Hello(c Conn, nick, token string) (*Player, bool) {
-	var p *Player
-	resumed := false
-
-	var stale Conn
-	h.mu.Lock()
 	if token != "" {
+		h.mu.Lock()
+		if p := h.playersByToken[token]; p != nil {
+			stale, nickChanged := h.bindResumedLocked(p, c, nick)
+			pid := p.ID()
+			h.mu.Unlock()
+			if stale != nil {
+				stale.Close()
+			}
+			if nickChanged {
+				h.store.UpdateNick(pid, nick)
+			} else {
+				// Slide the backing store's TTL outside h.mu.
+				_, _ = h.store.PlayerByID(pid)
+			}
+			return p, true
+		}
+		h.mu.Unlock()
+
+		// Cross-restart fallback: consult the persistent store outside h.mu.
 		if rec, ok := h.store.PlayerByToken(token); ok {
-			p = h.players[rec.PlayerID]
+			h.mu.Lock()
+			p := h.players[rec.PlayerID]
 			if p == nil {
-				// Session record outlived its runtime entry; recreate it.
 				p = &Player{rec: rec, state: StateLobby}
 				h.players[rec.PlayerID] = p
+				h.playersByToken[rec.Token] = p
 			}
-			if p.conn != nil {
-				// Takeover (PROTOCOL §1): the token is the credential, so a
-				// new connection with it wins — kill the old one and bind.
-				stale = p.conn
+			stale, nickChanged := h.bindResumedLocked(p, c, nick)
+			pid := p.ID()
+			h.mu.Unlock()
+			if stale != nil {
+				stale.Close()
 			}
-			p.conn = c
-			p.disconnectedAt = time.Time{}
-			if rec.Nick != nick {
-				h.store.UpdateNick(rec.PlayerID, nick)
+			if nickChanged {
+				h.store.UpdateNick(pid, nick)
 			}
-			// Sanitize a stale room reference: e.g. the game ended while
-			// the player was offline, or a waiting room was deleted.
-			if p.state != StateLobby && h.rooms[p.roomID] == nil {
-				p.state, p.roomID = StateLobby, ""
-			}
-			resumed = true
-			slog.Info("player resumed", "playerId", p.ID(), "roomId", p.roomID)
+			return p, true
 		}
 		// Unknown token: fall through and issue a fresh session. A stale
 		// token is not an error for the client.
 	}
-	if p == nil {
-		rec := h.store.CreatePlayer(nick)
-		p = &Player{rec: rec, conn: c, state: StateLobby}
-		h.players[rec.PlayerID] = p
-		slog.Info("player connected", "playerId", p.ID(), "nick", p.Nick())
-	}
+
+	// Fresh session: allocate and persist outside h.mu, then register.
+	rec := h.store.CreatePlayer(nick)
+	h.mu.Lock()
+	p := &Player{rec: rec, conn: c, state: StateLobby}
+	h.players[rec.PlayerID] = p
+	h.playersByToken[rec.Token] = p
+	slog.Info("player connected", "playerId", p.ID(), "nick", p.Nick())
 	h.mu.Unlock()
-	if stale != nil {
-		stale.Close() // kicked conn's PlayerDisconnected sees p.conn!=it and no-ops
-	}
-	return p, resumed
+	return p, false
 }
 
 // ResumeGame posts a reconnect event to the player's live game actor, if
@@ -155,12 +187,12 @@ func (h *Hub) CreateRoom(p *Player, name string) {
 	}}
 	e.seats[0] = p
 	h.rooms[id] = e
-	h.store.UpsertRoom(e.meta)
 	p.state = StateWaiting
 	p.roomID = id
 	room := protoRoomLocked(e)
 	h.mu.Unlock()
 
+	h.syncRoomStore(id)
 	if dequeued {
 		h.reply(p, protocol.NewMatchmaking(protocol.MatchCancelled, 0))
 	}
@@ -197,6 +229,7 @@ func (h *Hub) JoinRoom(p *Player, roomID string) {
 	slog.Info("game started", "roomId", roomID, "joinedBy", p.ID())
 	h.mu.Unlock()
 
+	h.syncRoomStore(roomID)
 	if dequeued {
 		h.reply(p, protocol.NewMatchmaking(protocol.MatchCancelled, 0))
 	}
@@ -222,10 +255,10 @@ func (h *Hub) LeaveRoom(p *Player) {
 	roomID := e.meta.ID
 	if e.meta.Status == protocol.RoomWaiting {
 		delete(h.rooms, roomID)
-		h.store.DeleteRoom(roomID)
 		p.roomID = ""
 		p.state = StateLobby
 		h.mu.Unlock()
+		h.syncRoomStore(roomID)
 		h.reply(p, protocol.NewRoomLeft(roomID))
 		h.broadcastRoomList()
 		return
@@ -251,6 +284,7 @@ func (h *Hub) ListRooms(p *Player) {
 // them against the head and starts a game (PROTOCOL §2).
 func (h *Hub) Matchmake(p *Player) {
 	var actor *game.Actor
+	var pairedRoomID string
 	position := 0
 	h.mu.Lock()
 	if p.roomID != "" {
@@ -271,13 +305,15 @@ func (h *Hub) Matchmake(p *Player) {
 		e := h.newRoomLocked(a.Nick()+"'s room", false)
 		e.seats[0], e.seats[1] = a, b
 		a.roomID, b.roomID = e.meta.ID, e.meta.ID
+		pairedRoomID = e.meta.ID
 		actor = h.startGameLocked(e)
 		slog.Info("game started", "roomId", e.meta.ID, "black", a.ID(), "white", b.ID())
 	}
 	h.mu.Unlock()
 
 	if actor != nil {
-		// Paired: game_start alone carries the news; no stale queued reply.
+		// Paired: persist room outside h.mu, then broadcast and start actor.
+		h.syncRoomStore(pairedRoomID)
 		h.broadcastRoomList()
 		actor.Start()
 		return
@@ -304,6 +340,7 @@ func (h *Hub) PlayAI(p *Player, difficulty string) {
 		return
 	}
 	var actor *game.Actor
+	var roomID string
 	h.mu.Lock()
 	if p.roomID != "" {
 		h.mu.Unlock()
@@ -317,14 +354,16 @@ func (h *Hub) PlayAI(p *Player, difficulty string) {
 		rec:  &store.PlayerRecord{PlayerID: randID("ai", 8), Nick: "AI (" + difficulty + ")"},
 		isAI: true,
 	}
-	p.roomID = e.meta.ID
+	roomID = e.meta.ID
+	p.roomID = roomID
 	actor = h.startGameLocked(e)
 	actor.SetObserver(ai.NewDriver(actor, actor.Done(), e.seats[1].ID(),
 		protocol.ColorWhite, difficulty, h.cfg.AIThink).Notify)
 	h.aiGames.Add(1)
-	slog.Info("ai game started", "playerId", p.ID(), "roomId", e.meta.ID, "difficulty", difficulty)
+	slog.Info("ai game started", "playerId", p.ID(), "roomId", roomID, "difficulty", difficulty)
 	h.mu.Unlock()
 
+	h.syncRoomStore(roomID)
 	if dequeued {
 		h.reply(p, protocol.NewMatchmaking(protocol.MatchCancelled, 0))
 	}
@@ -376,7 +415,8 @@ func (h *Hub) gameActor(p *Player) *game.Actor {
 	return nil
 }
 
-// newRoomLocked inserts a fresh room entry. Caller holds h.mu.
+// newRoomLocked inserts a fresh room entry in memory. Store persistence is
+// performed by the caller via syncRoomStore after releasing h.mu.
 func (h *Hub) newRoomLocked(name string, isAI bool) *roomEntry {
 	e := &roomEntry{meta: store.RoomRecord{
 		ID:        randID("r", 8),
@@ -386,15 +426,13 @@ func (h *Hub) newRoomLocked(name string, isAI bool) *roomEntry {
 		CreatedAt: protocol.NowMs(),
 	}}
 	h.rooms[e.meta.ID] = e
-	h.store.UpsertRoom(e.meta)
 	return e
 }
 
 // startGameLocked flips a room to playing, seats its players and creates the
-// actor. The caller starts it after the lock is released. Caller holds h.mu.
+// actor. The caller syncs the store and starts the actor after h.mu is released.
 func (h *Hub) startGameLocked(e *roomEntry) *game.Actor {
 	e.meta.Status = protocol.RoomPlaying
-	h.store.UpsertRoom(e.meta)
 	for _, p := range e.seats {
 		if p != nil {
 			p.state = StatePlaying
@@ -426,8 +464,9 @@ func (h *Hub) gameOver(roomID string) {
 		}
 	}
 	delete(h.rooms, roomID)
-	h.store.DeleteRoom(roomID)
 	h.gamesPlayed.Add(1)
 	h.mu.Unlock()
+
+	h.syncRoomStore(roomID)
 	h.broadcastRoomList()
 }
