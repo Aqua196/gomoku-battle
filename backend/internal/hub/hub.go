@@ -1,9 +1,10 @@
 // Package hub is the mutex-protected registry at the center of the server:
 // players, rooms, the FIFO matchmaking queue and the lobby broadcast
-// (DESIGN §2/§3). It never sends network traffic while holding its lock —
-// every outbound write is a non-blocking TrySend into a connection's
-// buffered channel, and every game-actor post happens after the lock is
-// released, so there is no lock ordering with actor code.
+// (DESIGN §2/§3). It never sends network traffic or performs Store I/O while
+// holding its lock — every outbound write is a non-blocking TrySend into a
+// connection's buffered channel, every Store persistence call runs outside
+// h.mu, and every game-actor post happens after the lock is released, so
+// there is no lock ordering with actor or network code.
 package hub
 
 import (
@@ -91,10 +92,15 @@ type Hub struct {
 	cfg   protocol.Config
 	store store.Store
 
-	mu      sync.Mutex
-	players map[string]*Player // by player id; disconnected players stay resumable
-	rooms   map[string]*roomEntry
-	queue   []*Player // FIFO
+	// storeMu serializes room Store persistence outside h.mu (lock order:
+	// storeMu -> mu, never mu -> storeMu) so concurrent UpsertRoom and
+	// DeleteRoom calls never reorder while keeping network I/O out of h.mu.
+	storeMu        sync.Mutex
+	mu             sync.Mutex
+	players        map[string]*Player // by player id; disconnected players stay resumable
+	playersByToken map[string]*Player // by resume token; authoritative runtime index
+	rooms          map[string]*roomEntry
+	queue          []*Player // FIFO
 
 	connCount   atomic.Int64
 	gamesPlayed atomic.Int64
@@ -111,11 +117,12 @@ type Hub struct {
 // the session sweeper (R4: disconnected non-playing sessions expire).
 func New(st store.Store, cfg protocol.Config) *Hub {
 	h := &Hub{
-		cfg:       cfg,
-		store:     st,
-		players:   make(map[string]*Player),
-		rooms:     make(map[string]*roomEntry),
-		sweepStop: make(chan struct{}),
+		cfg:            cfg,
+		store:          st,
+		players:        make(map[string]*Player),
+		playersByToken: make(map[string]*Player),
+		rooms:          make(map[string]*roomEntry),
+		sweepStop:      make(chan struct{}),
 	}
 	if cfg.SweepInterval > 0 {
 		go h.sweepLoop()
@@ -128,6 +135,33 @@ func New(st store.Store, cfg protocol.Config) *Hub {
 
 // Stop halts the background sweeper.
 func (h *Hub) Stop() { close(h.sweepStop) }
+
+// syncRoomStore persists the latest authoritative state of roomID to h.store
+// outside h.mu. Serializing under storeMu before briefly inspecting h.rooms
+// guarantees that a rapid CreateRoom -> DeleteRoom sequence never leaves a
+// stale room in the Store.
+func (h *Hub) syncRoomStore(roomID string) {
+	if roomID == "" {
+		return
+	}
+	h.storeMu.Lock()
+	defer h.storeMu.Unlock()
+
+	h.mu.Lock()
+	var meta store.RoomRecord
+	exists := false
+	if e := h.rooms[roomID]; e != nil {
+		meta = e.meta
+		exists = true
+	}
+	h.mu.Unlock()
+
+	if exists {
+		h.store.UpsertRoom(meta)
+	} else {
+		h.store.DeleteRoom(roomID)
+	}
+}
 
 // sweepLoop expires disconnected non-playing sessions on SessionTTL. Playing
 // sessions are never reaped here: their fate belongs to the game actor (the
@@ -155,6 +189,7 @@ func (h *Hub) sweep() {
 		}
 		if now.Sub(p.disconnectedAt) > h.cfg.SessionTTL {
 			delete(h.players, id)
+			delete(h.playersByToken, p.Token())
 			expired = append(expired, id)
 		}
 	}

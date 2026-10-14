@@ -3,9 +3,5 @@
 | # | 现象 | 已尝试 | 推测原因 | 状态 |
 |---|---|---|---|---|
 | K1 | 预置 `GITHUB_BURNER_PAT` 调用 GitHub API 返回 401 Bad credentials | 用 `gh`（devin-ai-integration app）尝试建仓 → `createRepository` 不被授权；App 能列仓不能建仓 | PAT 已吊销/过期 | ✅ 已由用户提供新 PAT 解决（建仓成功） |
-
-## KI-3 运行期 Redis 故障的降级语义有限（M4-R2，已知取舍）
-
-- **现象**：`RedisStore` 将一切 miss/传输错误降级为"未找到"并 WARN。运行期 Redis 抖动时 `PlayerByToken` 会 miss → 老玩家 hello 拿到新会话身份，旧对局在内存中仍在但从此不可达；`CreatePlayer` 写失败仍返回 rec（hub 视为已持久，实际重启即丢）。
-- **已尝试/缓解**：(1) 每次调用 300ms `opTimeout` 封顶，杜绝网络重试把 hub 冻结（实测降级的三次调用 <3s）；(2) 启动期 ~5s ping 重试 + compose `service_healthy` 依赖消除"启动竞态即永久降级"；(3) 读路径滑动 TTL + 索引双向化，缩小分叉面。
-- **推测根因与取舍**：Store 接口是 error-free 契约，hub 运行期内存态才是权威（Redis 仅用于重启恢复/重连持久化）。把"传输错误≠miss"透传进接口需要改签名并让 hub 区分 503——重构成正交鉴权/错误通道超出本期范围。威胁模型：会话 token 明文存 Redis，拿到 Redis 读权限即可接管会话——compose redis 仅内网 expose，按内部可信边界对待（PROD 应加 AUTH/TLS，见 README）。
+| K2 | `TestConcurrent100Rooms` 在高负载 CI 下偶发 `send move: write tcp ...: i/o timeout` | 排查 `wsclient` 与 `gorilla/websocket` 源码 | `gorilla/websocket` 默认 `PingHandler` 调 `WriteControl` 设 1s 写超时且不清除，污染后续无 deadline 的 `Send` | ✅ 已修复（`wsclient` 自定义 10s Pong 处理器并每次 `Send` 刷新并清除写超时） |
+| KI-3 | 运行期 Redis 瞬时故障或慢响应影响 `Hub` | (1) 每次调用 300ms `opTimeout` 封顶；(2) `Hub` 新增 `playersByToken` 内存快路径并将全部 `Store` IO 移出 `h.mu` 临界区（`syncRoomStore` 锁外同步） | 原实现将 `Store` IO 放在 `h.mu` 内且 `Hello` 仅查 `Store` | ✅ 运行期会话恢复已由内存快路径兜底且不阻塞 `h.mu`（`TestResumeSurvivesTransientStoreDown`）；跨进程重启仍仅恢复玩家身份与房间元数据，实时棋盘状态驻留内存 `game.Actor` |
