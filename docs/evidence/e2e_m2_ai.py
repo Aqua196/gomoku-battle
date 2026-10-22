@@ -1,5 +1,5 @@
 from playwright.sync_api import sync_playwright
-import time, json
+import json, pathlib, time
 with sync_playwright() as p:
     browser = p.chromium.connect_over_cdp("http://localhost:29229")
     ctx = browser.new_context()
@@ -38,5 +38,5 @@ with sync_playwright() as p:
     # check thinking hint appeared at least transiently (poll) — skip if too fast
     badge = pg.locator('text=人机').count()
     print(f"RESULT my_moves={my_done} badge(人机)={badge}")
-    pg.screenshot(path="/home/ubuntu/repos/gomoku-battle/docs/evidence/m2-e2e-ai.png", full_page=False)
+    pg.screenshot(path=str(pathlib.Path(__file__).with_name("m2-e2e-ai.png")), full_page=False)
     ctx.close()

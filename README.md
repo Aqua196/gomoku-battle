@@ -51,11 +51,11 @@ cd frontend && npm run build && cd ../backend && go run ./cmd/server
 cd backend && go test -race ./...                        # 全量：规则/WS集成/AI/100房并发/Store契约(miniredis)
 WS_ADDR=ws://localhost:8080/ws go test ./internal/integration -run Container -v   # 对运行中实例(容器)的全流程关卡
 cd frontend && npm test                                  # vitest
-/tmp/loadtest -rooms 200 -duration 60s                   # 压测（backend/cmd/loadtest）
+cd backend && go run ./cmd/loadtest -rooms 200 -duration 60s   # 压测（需先启动服务端）
 ```
 
-CI：`.github/workflows/ci.yml`（vet + race 测试 + 前端 typecheck/lint/build）。
+CI：`.github/workflows/ci.yml`（vet + race 测试 + 前端 typecheck/lint/build + compose 容器关卡）。
 
 ## 文档索引
 
-`PROTOCOL.md` 消息协议 · `DESIGN.md` 架构/并发/取舍 · `ACCEPTANCE.md` 逐项验收证据 · `BENCHMARK.md` 压测报告 · `DECISIONS.md` 决策记录 · `KNOWN_ISSUES.md` 已知问题 · `INTERVIEW_NOTES.md` 面试问答 · `docs/reviews/` 各阶段独立评审 · `docs/evidence/` 原始证据
+`PROTOCOL.md` 消息协议 · `DESIGN.md` 架构/并发/取舍 · `ACCEPTANCE.md` 逐项验收证据 · `BENCHMARK.md` 压测报告 · `DECISIONS.md` 决策记录 · `KNOWN_ISSUES.md` 已知问题 · `docs/reviews/` 各阶段独立评审 · `docs/evidence/` 原始证据
