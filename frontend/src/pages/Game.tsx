@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Board } from '../components/Board'
 import { Icon } from '../components/Icon'
+import { Roll } from '../components/Motion'
 import { PlayerPanel } from '../components/PlayerPanel'
 import { ResultOverlay } from '../components/ResultOverlay'
 import { Rail } from '../components/Rail'
@@ -191,20 +192,24 @@ function GameView({ game }: { game: GameState }) {
                 color: youColor,
                 onPlay: play,
               }}
-              className={over ? 'finished' : undefined}
+              className={over ? 'scan finished' : 'scan'}
             />
           </div>
           <div className="board-meta mono" aria-hidden>
             <span>#{game.roomId.slice(-6).toUpperCase()}</span>
             <span>15×15 // FREESTYLE</span>
             <span>
-              MOVE <b>{pad3(game.moveNumber)}</b> / 225
+              MOVE{' '}
+              <b>
+                <Roll value={pad3(game.moveNumber)} />
+              </b>{' '}
+              / 225
             </span>
           </div>
         </section>
 
         <aside className="game-side">
-          <header className="side-head">
+          <header className="side-head reveal">
             <span className="sec-no mono">02</span>
             <div className="sec-title">
               <h1>对局</h1>
@@ -213,7 +218,11 @@ function GameView({ game }: { game: GameState }) {
             <div className="side-meta">
               {aiBadge && <em className="tag ai">{aiBadge}</em>}
               <span className="side-moves">
-                第 <b className="mono">{game.moveNumber}</b> 手
+                第{' '}
+                <b className="mono">
+                  <Roll value={game.moveNumber} />
+                </b>{' '}
+                手
               </span>
             </div>
           </header>

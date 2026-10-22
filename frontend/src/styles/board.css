@@ -9,7 +9,7 @@
   width: 100%;
   aspect-ratio: 1 / 1;
   container-type: inline-size;
-  border: 1px solid var(--ink);
+  border: 1px solid var(--line);
   background: var(--board);
   user-select: none;
   -webkit-user-select: none;
@@ -23,6 +23,26 @@
   color: var(--ink-3);
   font: 500 clamp(8px, 1.45cqi, 12px) / 1 var(--font-mono);
   pointer-events: none;
+}
+
+.board-coords span {
+  transition:
+    color 0.2s,
+    transform 0.25s var(--ease-out);
+}
+
+.board-coords .hot {
+  color: var(--ink);
+  font-weight: 700;
+  transform: scale(1.35);
+}
+
+.board-coords.cols .hot {
+  box-shadow: inset 0 -0.35cqi 0 var(--accent);
+}
+
+.board-coords.rows .hot {
+  box-shadow: inset -0.35cqi 0 0 var(--accent);
 }
 
 .board-coords.cols {
@@ -69,6 +89,59 @@
 
 .board-star {
   fill: var(--ink);
+}
+
+/* Aiming crosshair: hairlines that glide to the hovered intersection. */
+.xh {
+  position: absolute;
+  z-index: 2;
+  background: var(--ink);
+  opacity: 0.32;
+  pointer-events: none;
+  transition:
+    top 0.16s var(--ease-out),
+    left 0.16s var(--ease-out);
+}
+
+.xh-h {
+  left: -3%;
+  right: -3%;
+  height: 1px;
+}
+
+.xh-v {
+  top: -3%;
+  bottom: -3%;
+  width: 1px;
+}
+
+/* One-time scan sweep when a game board first appears. */
+.board.scan .board-inner::after {
+  content: '';
+  position: absolute;
+  left: -4%;
+  right: -4%;
+  top: 0;
+  z-index: 5;
+  height: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--ink);
+  pointer-events: none;
+  animation: scan 1.1s 0.15s var(--ease) both;
+}
+
+@keyframes scan {
+  0% {
+    top: 0;
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
 }
 
 .board-cells {

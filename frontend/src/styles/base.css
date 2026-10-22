@@ -182,3 +182,61 @@ figure {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ── Choreography: staggered reveal, rolling digits, marquee ─────── */
+
+.reveal {
+  /* backwards, not both: the clip must not outlive the entrance (it would
+     crop shadows and corner brackets that sit outside the box). */
+  animation: reveal 0.8s var(--ease-out) backwards;
+  animation-delay: var(--d, 0s);
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.roll {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+
+.roll-in {
+  display: inline-block;
+  animation: roll-in 0.38s var(--ease-out) both;
+}
+
+@keyframes roll-in {
+  from {
+    opacity: 0;
+    transform: translateY(90%);
+  }
+}
+
+.marquee {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.marquee-track {
+  display: inline-flex;
+  animation: marquee var(--marquee-speed, 40s) linear infinite;
+}
+
+.marquee-track > * {
+  flex: none;
+}
+
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}

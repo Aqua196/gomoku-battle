@@ -303,18 +303,20 @@
   font-size: 11px;
 }
 
+/* Underline field; a highlighter stroke sweeps in on focus. */
 .field-input {
   min-width: 0;
   height: 54px;
-  padding: 0 16px;
-  border: 1px solid var(--ink);
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 2px solid var(--ink);
   border-radius: 0;
-  background: var(--surface-2);
+  background: linear-gradient(var(--accent), var(--accent)) left bottom / 0% 10px no-repeat;
   color: var(--ink);
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
   outline: none;
-  transition: box-shadow 0.2s var(--ease);
+  transition: background-size 0.45s var(--ease);
 }
 
 .field-input::placeholder {
@@ -323,7 +325,7 @@
 }
 
 .field-input:focus {
-  box-shadow: inset 6px 0 0 var(--accent);
+  background-size: 100% 10px;
 }
 
 .field-input:disabled {
@@ -332,7 +334,12 @@
 
 .field-input.sm {
   height: 42px;
-  font-size: 14px;
+  font-size: 15px;
+  background-size: 0% 6px;
+}
+
+.field-input.sm:focus {
+  background-size: 100% 6px;
 }
 
 .tag {
@@ -383,48 +390,45 @@
   box-shadow: inset 0 0 0 1px var(--ink-4);
 }
 
-/* Spec sheet rows: ink label block + value. */
+/* Data list: hairline-ruled rows, small label left, value right. */
 .spec,
-.pp-spec,
 .slab-spec {
   display: grid;
-  gap: 4px;
 }
 
 .spec > div,
-.pp-spec > div,
 .slab-spec > div {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  align-items: stretch;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: baseline;
+  border-bottom: 1px solid var(--line);
+}
+
+.spec > div:first-child {
+  border-top: 1px solid var(--ink);
 }
 
 .spec dt,
-.pp-spec dt,
 .slab-spec dt {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 10px;
-  background: var(--ink);
-  color: var(--bg);
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 0;
+  color: var(--ink-3);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .spec dt small {
+  color: var(--ink-4);
   font-size: 10px;
-  opacity: 0.6;
 }
 
 .spec dd,
-.pp-spec dd,
 .slab-spec dd {
-  display: flex;
-  align-items: center;
-  padding: 6px 12px;
-  background: var(--surface-2);
-  font-size: 13px;
+  padding: 9px 0;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 /* ── Connection, toast, banner ───────────────────────────────────── */

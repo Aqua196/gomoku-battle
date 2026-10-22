@@ -53,7 +53,10 @@ export function Board({ cells, lastMove, winLine, order, coords = true, interact
   const gridRef = useRef<HTMLDivElement>(null)
   const [focus, setFocus] = useState<Point>({ x: Math.floor(n / 2), y: Math.floor(n / 2) })
   const [armed, setArmed] = useState<string | null>(null)
+  const [hover, setHover] = useState<Point | null>(null)
   const enabled = !!interaction?.enabled
+  // Crosshair + coordinate highlight only while a move can be made.
+  const aim = enabled ? hover : null
 
   // Any new stone or a lost turn invalidates an armed touch target.
   useEffect(() => {
@@ -97,12 +100,16 @@ export function Board({ cells, lastMove, winLine, order, coords = true, interact
         <>
           <div className="board-coords cols" aria-hidden>
             {cells.map((_, i) => (
-              <span key={i}>{colLabel(i)}</span>
+              <span key={i} className={aim?.x === i ? 'hot' : undefined}>
+                {colLabel(i)}
+              </span>
             ))}
           </div>
           <div className="board-coords rows" aria-hidden>
             {cells.map((_, i) => (
-              <span key={i}>{rowLabel(i, n)}</span>
+              <span key={i} className={aim?.y === i ? 'hot' : undefined}>
+                {rowLabel(i, n)}
+              </span>
             ))}
           </div>
         </>
@@ -123,12 +130,20 @@ export function Board({ cells, lastMove, winLine, order, coords = true, interact
             ))}
         </svg>
 
+        {aim && (
+          <>
+            <span className="xh xh-h" style={{ top: `${((aim.y + 0.5) / n) * 100}%` }} aria-hidden />
+            <span className="xh xh-v" style={{ left: `${((aim.x + 0.5) / n) * 100}%` }} aria-hidden />
+          </>
+        )}
+
         <div
           ref={gridRef}
           className="board-cells"
           role={interaction ? 'group' : undefined}
           aria-label={interaction ? '棋盘，方向键移动，回车落子' : undefined}
           onKeyDown={interaction ? onKeyDown : undefined}
+          onPointerLeave={interaction ? () => setHover(null) : undefined}
         >
           {cells.flatMap((row, y) =>
             row.map((cell, x) => {
@@ -170,6 +185,7 @@ export function Board({ cells, lastMove, winLine, order, coords = true, interact
                   aria-label={`${pointLabel(x, y, n)} ${cell === 1 ? '黑子' : cell === 2 ? '白子' : '空'}`}
                   aria-disabled={!playable}
                   onFocus={() => setFocus({ x, y })}
+                  onPointerEnter={() => setHover({ x, y })}
                   onClick={() => play(x, y)}
                 >
                   {stone}

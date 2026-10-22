@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { Roll } from '../components/Motion'
 import { Rail } from '../components/Rail'
 import { useNow } from '../hooks/useNow'
 import { DIFFICULTIES } from '../state/ai'
@@ -77,12 +78,12 @@ function LobbyHome() {
       <Rail />
       <main className="stage lobby">
         <header className="sec-head">
-          <span className="sec-no mono">01</span>
-          <div className="sec-title wipe">
+          <span className="sec-no mono reveal">01</span>
+          <div className="sec-title reveal" style={{ ['--d' as string]: '0.08s' }}>
             <h1>大厅</h1>
             <p className="en">Lobby</p>
           </div>
-          <div className="sec-meta">
+          <div className="sec-meta reveal" style={{ ['--d' as string]: '0.16s' }}>
             <span>
               {greeting(new Date(now).getHours())}，<b>{session.nick}</b>
             </span>
@@ -109,6 +110,9 @@ function LobbyHome() {
 
         <section className="modes">
           <article className={`mode mode-match${lobby.matchmaking ? ' searching' : ''}`}>
+            <span className="mode-big mono" aria-hidden>
+              01
+            </span>
             <div className="mode-top">
               <span className="mono">A-01</span>
               <span className="en">Quick Match</span>
@@ -122,7 +126,9 @@ function LobbyHome() {
                   <span className="mono">
                     SEARCHING{lobby.queuePosition ? ` · QUEUE ${pad(lobby.queuePosition)}` : '…'}
                   </span>
-                  <b className="mono">{formatElapsed(matchSince ? now - matchSince : 0)}</b>
+                  <b className="mono">
+                    <Roll value={formatElapsed(matchSince ? now - matchSince : 0)} />
+                  </b>
                 </div>
                 <button className="btn block" onClick={() => api.matchmakeCancel()}>
                   <span>取消匹配</span>
@@ -145,6 +151,9 @@ function LobbyHome() {
           </article>
 
           <article className="mode mode-ai">
+            <span className="mode-big mono" aria-hidden>
+              02
+            </span>
             <div className="mode-top">
               <span className="mono">A-02</span>
               <span className="en">Versus AI</span>
@@ -171,6 +180,9 @@ function LobbyHome() {
           </article>
 
           <article className="mode mode-room">
+            <span className="mode-big mono" aria-hidden>
+              03
+            </span>
             <div className="mode-top">
               <span className="mono">A-03</span>
               <span className="en">Custom Room</span>
@@ -205,7 +217,9 @@ function LobbyHome() {
             <span className="sec-no sm mono">02</span>
             <h2>房间列表</h2>
             <span className="en">Rooms</span>
-            <span className="mono sub-count">[ {pad(lobby.rooms.length)} ]</span>
+            <span className="mono sub-count">
+              [ <Roll value={pad(lobby.rooms.length)} /> ]
+            </span>
             <button className="icon-btn" aria-label="刷新房间列表" title="刷新" onClick={() => api.listRooms()}>
               <Icon name="refresh" />
             </button>

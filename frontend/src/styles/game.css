@@ -104,7 +104,7 @@
   top: 24px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 4px;
   animation: slide-up 0.5s 0.1s var(--ease-out) both;
 }
 
@@ -114,7 +114,7 @@
   align-items: end;
   gap: 14px;
   padding-bottom: 14px;
-  border-bottom: 2px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
 }
 
 .side-head .sec-no {
@@ -144,200 +144,209 @@
   font-weight: 500;
 }
 
-/* Player spec panel */
+/* Player seat: glyph anchor, typed details, hairline tick clock. */
 .pp {
-  border: 1px solid var(--ink);
-  background: var(--surface-2);
-  transition: box-shadow 0.3s var(--ease);
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0 16px 18px;
 }
 
-.pp.active {
-  box-shadow: 6px 6px 0 var(--ink);
+.pp::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 0;
+  width: 3px;
+  background: var(--line);
+  transform-origin: top;
+  transition: background 0.3s;
 }
 
-.pp.you.active {
-  box-shadow: 6px 6px 0 var(--accent), 6px 6px 0 1px var(--ink);
+.pp.active::before {
+  background: var(--ink);
+  animation: bar-grow 0.5s var(--ease-out) both;
 }
 
-.pp-head {
+.pp.you.active::before {
+  width: 6px;
+  background: var(--accent);
+  box-shadow: 1px 0 0 var(--ink);
+}
+
+@keyframes bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+.pp-glyph {
+  font-size: 52px;
+  font-weight: 900;
+  line-height: 1;
+  transition: transform 0.4s var(--ease-out);
+}
+
+.pp.white .pp-glyph {
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--ink);
+}
+
+.pp:not(.active) .pp-glyph {
+  opacity: 0.35;
+}
+
+.pp.active .pp-glyph {
+  transform: translateX(2px);
+}
+
+.pp-name {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding-right: 12px;
-  border-bottom: 1px solid var(--ink);
-}
-
-.pp-side {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 12px;
-  border-right: 1px solid var(--ink);
-  font-size: 15px;
-  font-weight: 900;
-}
-
-.pp-side.black {
-  background: var(--ink);
-  color: var(--bg);
-}
-
-.pp-side small {
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  opacity: 0.6;
 }
 
 .pp-nick {
   overflow: hidden;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.pp-spec {
-  gap: 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.pp-spec > div {
-  grid-template-columns: 64px minmax(0, 1fr);
-}
-
-.pp-spec > div + div {
-  border-top: 1px solid var(--line);
-}
-
-.pp-spec dt {
-  padding: 5px 10px;
-  background: transparent;
+.pp-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 3px 0 10px;
   color: var(--ink-3);
   font-size: 12px;
-  font-weight: 600;
 }
 
-.pp-spec dd {
-  padding: 5px 10px;
-  background: transparent;
+.pp-meta .en {
+  font-size: 11px;
+  letter-spacing: 0.2em;
 }
 
-.pp-spec dd.alert {
+.pp-meta .off {
   color: var(--alert);
   font-weight: 700;
+  animation: blink 1s steps(1) infinite;
 }
 
-.pp-clock {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-}
-
-.seg {
-  flex: 1;
+.ticks {
   display: grid;
   grid-template-columns: repeat(30, 1fr);
-  gap: 2px;
-  height: 12px;
+  gap: 3px;
+  height: 10px;
 }
 
-.seg i {
+.ticks i {
   background: var(--line);
+  transform-origin: bottom;
+  transform: scaleY(0.45);
+  transition:
+    transform 0.3s var(--ease-out),
+    background 0.3s;
 }
 
-.seg i.on {
+.ticks i.on {
   background: var(--ink);
+  transform: none;
 }
 
-.pp.you .seg i.on {
+.pp.you .ticks i.on {
   background: var(--ink);
-  box-shadow: inset 0 -4px 0 var(--accent);
+  box-shadow: inset 0 -3px 0 var(--accent);
 }
 
-.pp-clock.danger .seg i.on {
+.ticks.danger i.on {
   background: var(--alert);
   box-shadow: none;
 }
 
 .pp-secs {
-  min-width: 44px;
-  font-size: 24px;
+  min-width: 52px;
+  color: var(--ink-4);
+  font-size: 34px;
   font-weight: 500;
   line-height: 1;
   text-align: right;
 }
 
-.pp-secs small {
-  margin-left: 2px;
-  color: var(--ink-3);
-  font-size: 11px;
+.pp.active .pp-secs {
+  color: var(--ink);
 }
 
-.pp-clock.danger .pp-secs {
-  color: var(--alert);
-  animation: blink 1s steps(1) infinite;
+.pp-secs.danger {
+  color: var(--alert) !important;
 }
 
-.pp:not(.active) .pp-secs {
-  color: var(--ink-4);
-}
-
-.pp.offline .pp-side,
 .pp.offline .pp-nick {
   opacity: 0.5;
 }
 
-/* Turn status bar */
+.slot-top .pp {
+  border-bottom: 1px solid var(--line);
+}
+
+/* Turn status: a highlighter stroke sweeps across the text on your move. */
 .turn-status {
   display: flex;
   align-items: center;
-  gap: 12px;
-  height: 56px;
-  padding: 0 16px;
-  border: 1px solid var(--ink);
-  background: repeating-linear-gradient(-45deg, transparent 0 6px, var(--line) 6px 7px), var(--surface);
-  font-size: 18px;
+  gap: 14px;
+  min-height: 64px;
+  padding: 0 0 0 18px;
+  font-size: 22px;
   font-weight: 900;
   letter-spacing: 0.08em;
 }
 
+.turn-text {
+  padding: 2px 8px;
+  margin-left: -8px;
+}
+
+.turn-status.mine .turn-text {
+  background: linear-gradient(var(--accent), var(--accent)) left / 0% 100% no-repeat;
+  animation: highlight 0.55s 0.05s var(--ease) forwards;
+}
+
+@keyframes highlight {
+  from {
+    color: var(--ink);
+  }
+  to {
+    background-size: 100% 100%;
+    color: var(--on-accent);
+  }
+}
+
 .turn-en {
-  margin-left: auto;
   color: var(--ink-3);
   font-size: 13px;
-  letter-spacing: 0.24em;
-}
-
-.turn-status.mine {
-  background: var(--accent);
-  color: var(--on-accent);
-  animation: wipe 0.45s var(--ease) both;
-}
-
-.turn-status.mine .turn-en {
-  margin-left: 0;
-  color: inherit;
-  opacity: 0.55;
+  letter-spacing: 0.26em;
 }
 
 .turn-caret {
-  width: 12px;
+  width: 10px;
   height: 22px;
   margin-left: auto;
-  background: currentColor;
+  background: var(--ink);
   animation: blink 1s steps(1) infinite;
 }
 
-.turn-status.over {
-  background: var(--ink);
-  color: var(--bg);
+.turn-status.wait,
+.turn-status.ai {
+  color: var(--ink-2);
 }
 
-.turn-status.over .turn-en {
-  color: var(--ink-4);
+.turn-status.over {
+  color: var(--ink-3);
 }
 
 .thinking-dots {
@@ -364,7 +373,9 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 6px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
 }
 
 .side-hint {
@@ -466,9 +477,6 @@
     order: 6;
   }
   .side-hint {
-    display: none;
-  }
-  .pp-spec {
     display: none;
   }
   .review-bar {

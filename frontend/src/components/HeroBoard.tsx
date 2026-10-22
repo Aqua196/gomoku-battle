@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { PointerEvent } from 'react'
 import { boardFromMoves, findWinLine } from '../lib/winLine'
 import type { Point } from '../lib/winLine'
 import { Board } from './Board'
+import { Roll } from './Motion'
 
 /*
  * A short scripted game for the landing figure: white builds a four on row 6
@@ -38,6 +40,21 @@ const pad = (n: number) => String(n).padStart(2, '0')
 /** Self-playing demo board, framed like a figure in a field manual. */
 export function HeroBoard() {
   const [step, setStep] = useState(() => (prefersReducedMotion() ? MOVES.length : 0))
+  const figRef = useRef<HTMLElement>(null)
+
+  // Parallax: the board and the yellow block drift against each other with
+  // the pointer. Written straight to CSS variables — no re-render per move.
+  const onPointerMove = (e: PointerEvent<HTMLElement>) => {
+    const el = figRef.current
+    if (!el || e.pointerType !== 'mouse') return
+    const r = el.getBoundingClientRect()
+    el.style.setProperty('--mx', ((e.clientX - r.left) / r.width - 0.5).toFixed(3))
+    el.style.setProperty('--my', ((e.clientY - r.top) / r.height - 0.5).toFixed(3))
+  }
+  const onPointerLeave = () => {
+    figRef.current?.style.setProperty('--mx', '0')
+    figRef.current?.style.setProperty('--my', '0')
+  }
 
   useEffect(() => {
     if (prefersReducedMotion()) return
@@ -53,12 +70,16 @@ export function HeroBoard() {
   const winLine = finished ? findWinLine(cells, lastMove) : null
 
   return (
-    <figure className="hero-fig">
+    <figure className="hero-fig" ref={figRef} onPointerMove={onPointerMove} onPointerLeave={onPointerLeave}>
       <div className="hero-block" />
       <figcaption className="fig-head">
         <span className="mono">FIG.01 — DEMO MATCH</span>
         <span className="mono">
-          MOVE <b>{pad(step)}</b> / {MOVES.length}
+          MOVE{' '}
+          <b>
+            <Roll value={pad(step)} />
+          </b>{' '}
+          / {MOVES.length}
         </span>
       </figcaption>
       <div className="hero-board bracketed">

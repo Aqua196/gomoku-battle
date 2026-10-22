@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { HeroBoard } from '../components/HeroBoard'
 import { Icon } from '../components/Icon'
+import { Marquee } from '../components/Motion'
 import { Rail } from '../components/Rail'
 import { useStore } from '../state/store'
 
@@ -24,25 +25,28 @@ export function Gate() {
       <Rail />
       <main className="stage gate">
         <section className="gate-copy">
-          <p className="kicker">
+          <p className="kicker reveal">
             <span className="rec">
               <i />
               REC
             </span>
             <span>GOMOKU // REAL-TIME BATTLE SYSTEM</span>
           </p>
-          <h1 className="gate-title wipe">
-            五子棋
-            <br />
-            对战
+          <h1 className="gate-title">
+            <span className="reveal" style={{ ['--d' as string]: '0.08s' }}>
+              五子棋
+            </span>
+            <span className="reveal" style={{ ['--d' as string]: '0.18s' }}>
+              对战
+            </span>
           </h1>
-          <p className="gate-en en">
+          <p className="gate-en en reveal" style={{ ['--d' as string]: '0.3s' }}>
             Gomoku<span>//</span>Battle
           </p>
 
           <dl className="spec">
-            {SPEC.map(([cn, en, value]) => (
-              <div key={en}>
+            {SPEC.map(([cn, en, value], i) => (
+              <div key={en} className="reveal" style={{ ['--d' as string]: `${0.36 + i * 0.05}s` }}>
                 <dt>
                   {cn}
                   <small className="en">{en}</small>
@@ -53,7 +57,8 @@ export function Gate() {
           </dl>
 
           <form
-            className="callsign"
+            className="callsign reveal"
+            style={{ ['--d' as string]: '0.62s' }}
             onSubmit={(e) => {
               e.preventDefault()
               api.connect(nick)
@@ -88,10 +93,16 @@ export function Gate() {
         </section>
 
         <footer className="band" aria-hidden>
-          <span className="band-word en">Gomoku Battle</span>
+          <Marquee speed={36}>
+            <span className="band-word en">Gomoku Battle</span>
+            <span className="band-dot" />
+            <span className="band-word cn">五子棋对战</span>
+            <span className="band-dot" />
+            <span className="band-word en outline">15×15 Freestyle</span>
+            <span className="band-dot" />
+          </Marquee>
           <span className="band-meta mono">
             SERVER-AUTHORITATIVE // WEBSOCKET // α-β SEARCH
-            <br />© GOMOKU-BATTLE PROJECT
           </span>
         </footer>
       </main>
