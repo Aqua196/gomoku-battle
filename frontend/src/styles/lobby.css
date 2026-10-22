@@ -1,0 +1,563 @@
+.lobby {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: clamp(24px, 5vh, 48px) clamp(16px, 4vw, 40px) 64px;
+}
+
+.lobby-hero {
+  animation: rise 0.5s var(--ease-out) both;
+}
+
+.lobby-hero h1 {
+  margin: 0 0 6px;
+  font: 700 clamp(28px, 3.4vw, 40px) / 1.2 var(--font-serif);
+  letter-spacing: 0.02em;
+}
+
+.lobby-nick {
+  font-family: var(--font-sans);
+  background: linear-gradient(100deg, var(--seal-2), var(--gold));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.lobby-hero p {
+  margin: 0;
+  color: var(--text-2);
+}
+
+/* ── Mode cards ──────────────────────────────────────────────────── */
+
+.modes {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 1fr;
+  gap: 18px;
+}
+
+.mode {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 26px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  overflow: hidden;
+  animation: rise 0.55s var(--ease-out) both;
+  transition:
+    border-color 0.25s,
+    transform 0.25s var(--ease-out),
+    box-shadow 0.25s;
+}
+
+.mode:nth-child(2) {
+  animation-delay: 0.06s;
+}
+
+.mode:nth-child(3) {
+  animation-delay: 0.12s;
+}
+
+.mode:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.mode h3 {
+  margin: 8px 0 0;
+  font: 700 21px/1.3 var(--font-serif);
+  letter-spacing: 0.08em;
+}
+
+.mode p {
+  flex: 1;
+  margin: 0 0 14px;
+  color: var(--text-2);
+  font-size: 13.5px;
+}
+
+.mode-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  border: 1px solid var(--line);
+  background: var(--panel-hi);
+}
+
+.mode-match {
+  border-color: color-mix(in srgb, var(--seal) 30%, var(--line));
+  background:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--seal) 20%, transparent), transparent 60%),
+    var(--panel);
+}
+
+/* Radar: idle it is an app-icon tile; while searching it pings outwards. */
+.radar {
+  position: relative;
+  width: 46px;
+  height: 46px;
+}
+
+.radar-core {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: linear-gradient(180deg, var(--seal-2), var(--seal));
+  color: #fff;
+  box-shadow: 0 10px 22px -8px var(--glow-seal);
+  transition: border-radius 0.4s var(--ease-out);
+}
+
+.radar i {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--seal-2);
+  opacity: 0;
+}
+
+.mode-match.searching .radar-core {
+  border-radius: 50%;
+}
+
+.mode-match.searching .radar i {
+  animation: radar 2.4s var(--ease-out) infinite;
+}
+
+.mode-match.searching .radar i:nth-child(2) {
+  animation-delay: 0.8s;
+}
+
+.mode-match.searching .radar i:nth-child(3) {
+  animation-delay: 1.6s;
+}
+
+@keyframes radar {
+  0% {
+    opacity: 0.75;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3.4);
+  }
+}
+
+.match-live {
+  animation: rise 0.3s var(--ease-out) both;
+}
+
+.match-status {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--seal) 25%, transparent);
+  background: color-mix(in srgb, var(--seal) 9%, transparent);
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.match-status b {
+  color: var(--text);
+  font: 600 20px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.difficulty {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.diff {
+  --diff-c: var(--ok);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 12px 12px 11px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.2s var(--ease-out),
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background 0.2s;
+}
+
+.diff-normal {
+  --diff-c: var(--warn);
+}
+
+.diff-hard {
+  --diff-c: var(--danger);
+}
+
+.diff:hover:not(:disabled) {
+  border-color: var(--diff-c);
+  background: color-mix(in srgb, var(--diff-c) 8%, var(--panel));
+  box-shadow: 0 12px 26px -16px var(--diff-c);
+  transform: translateY(-2px);
+}
+
+.diff:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.diff-bars {
+  display: flex;
+  gap: 3px;
+  margin-bottom: 6px;
+}
+
+.diff-bars i {
+  width: 12px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+
+.diff-bars i.on {
+  background: var(--diff-c);
+}
+
+.diff-name {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.diff-desc {
+  color: var(--text-3);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.room-form {
+  display: flex;
+  gap: 8px;
+}
+
+.room-form .input {
+  flex: 1;
+}
+
+/* ── My waiting room ─────────────────────────────────────────────── */
+
+.waiting-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 22px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--gold) 42%, transparent);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--gold) 13%, transparent), transparent 70%),
+    var(--panel);
+  animation: rise 0.4s var(--ease-out) both;
+}
+
+.waiting-seats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.waiting-seats .avatar-stone {
+  width: 36px;
+  height: 36px;
+}
+
+.waiting-dots {
+  display: inline-flex;
+  gap: 4px;
+  color: var(--gold);
+}
+
+.waiting-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: dot-bounce 1.2s infinite;
+}
+
+.waiting-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.waiting-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.waiting-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.waiting-copy h3 {
+  margin: 0;
+  overflow: hidden;
+  font: 700 17px/1.3 var(--font-sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.waiting-copy p {
+  margin: 2px 0 0;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+/* ── Room list ───────────────────────────────────────────────────── */
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.section-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font: 700 20px/1 var(--font-serif);
+  letter-spacing: 0.1em;
+}
+
+.count {
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--panel-hi);
+  color: var(--text-2);
+  font: 600 12px/1 var(--font-sans);
+  letter-spacing: 0;
+}
+
+.room-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.room-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  animation: rise 0.35s var(--ease-out) both;
+  transition:
+    border-color 0.2s,
+    transform 0.2s var(--ease-out),
+    box-shadow 0.2s;
+}
+
+.room-card.waiting:hover {
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.room-card.mine {
+  border-color: color-mix(in srgb, var(--seal) 45%, transparent);
+}
+
+.room-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.room-name {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-chip i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-chip.waiting {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+}
+
+.status-chip.waiting i {
+  animation: blink 1.4s infinite;
+}
+
+.status-chip.playing {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+}
+
+.status-chip.finished {
+  color: var(--text-3);
+  background: var(--panel-hi);
+}
+
+.room-seats {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 45%, transparent);
+}
+
+.seat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.seat:last-child {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.seat .avatar-stone {
+  width: 26px;
+  height: 26px;
+}
+
+.seat-nick {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seat.open .seat-nick {
+  color: var(--text-3);
+  font-weight: 400;
+}
+
+.room-vs {
+  color: var(--text-3);
+  font: italic 700 12px var(--font-latin);
+  letter-spacing: 0.1em;
+}
+
+.room-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+}
+
+.room-tags {
+  display: flex;
+  gap: 6px;
+}
+
+.empty-rooms {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 40px 16px;
+  border-radius: 16px;
+  border: 1px dashed var(--line-strong);
+  color: var(--text-3);
+  font-size: 13px;
+  text-align: center;
+}
+
+.empty-rooms svg {
+  width: 140px;
+  margin-bottom: 10px;
+}
+
+.empty-rooms b {
+  color: var(--text-2);
+  font-size: 15px;
+}
+
+.empty-grid line {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.empty-black {
+  fill: #1b1b1e;
+  stroke: rgba(255, 255, 255, 0.15);
+}
+
+.empty-white {
+  fill: #ece8df;
+  stroke: rgba(0, 0, 0, 0.12);
+}
+
+@media (max-width: 980px) {
+  .modes {
+    grid-template-columns: 1fr 1fr;
+  }
+  .mode-match {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .modes {
+    grid-template-columns: 1fr;
+  }
+  .mode {
+    padding: 22px;
+  }
+  .waiting-card {
+    flex-wrap: wrap;
+  }
+  .waiting-card .btn {
+    width: 100%;
+  }
+}

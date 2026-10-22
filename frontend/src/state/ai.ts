@@ -31,6 +31,13 @@ export function aiSeatColor(game: GameState): Color | null {
   return null
 }
 
+/** Difficulty of an AI seat parsed from its `AI (difficulty)` nick (§10). */
+export function aiDifficulty(aiPlayer: GamePlayer | null): Difficulty | null {
+  if (!aiPlayer?.isAI) return null
+  const key = /^AI\s*\(([^)]+)\)/.exec(aiPlayer.nick)?.[1]?.trim().toLowerCase()
+  return key && key in DIFFICULTY_LABEL ? (key as Difficulty) : null
+}
+
 /**
  * 「人机 · 难度」badge text for an AI opponent, e.g. 人机 · 普通.
  * Contract (PROTOCOL §10): the server names AI seats `AI (difficulty)`

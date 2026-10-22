@@ -4,7 +4,15 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0e1117" />
+    <meta name="theme-color" content="#0d0e12" />
+    <meta name="description" content="实时在线五子棋对战：快速匹配、三档 AI、断线重连。" />
+    <script>
+      // Apply the saved theme before first paint (no light/dark flash).
+      try {
+        var t = localStorage.getItem('gomoku.theme')
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t
+      } catch (e) {}
+    </script>
     <title>五子棋对战 · Gomoku Battle</title>
   </head>
   <body>

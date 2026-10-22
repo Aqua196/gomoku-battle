@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aiBadgeLabel, aiOpponent, aiSeatColor, isAiThinking } from './ai'
+import { aiBadgeLabel, aiDifficulty, aiOpponent, aiSeatColor, isAiThinking } from './ai'
 import type { GamePlayer, GameState } from '../ws/protocol'
 
 const aiP = (nick: string): GamePlayer => ({
@@ -96,5 +96,18 @@ describe('isAiThinking', () => {
       players: { black: human('p_a', 'a'), white: human('p_b', 'b') },
     })
     expect(isAiThinking(pvp, false)).toBe(false)
+  })
+})
+
+describe('aiDifficulty', () => {
+  it('parses the difficulty from the AI (difficulty) nick', () => {
+    expect(aiDifficulty(aiP('AI (hard)'))).toBe('hard')
+    expect(aiDifficulty(aiP('AI ( Easy )'))).toBe('easy')
+  })
+
+  it('null for humans, missing seats and unknown difficulties', () => {
+    expect(aiDifficulty(human('p_a', 'AI (hard)'))).toBeNull()
+    expect(aiDifficulty(null)).toBeNull()
+    expect(aiDifficulty(aiP('AI (godlike)'))).toBeNull()
   })
 })

@@ -1,0 +1,329 @@
+/*
+ * Kaya-wood board. Sizes inside the board use container units (cqi = 1% of
+ * the board's width) so stones, shadows and labels scale with the board.
+ */
+
+.board {
+  --pad: 6.4%;
+  --wood-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='900' height='900'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.0055 0.12' numOctaves='4' seed='11'/><feColorMatrix values='0 0 0 0 0.40  0 0 0 0 0.23  0 0 0 0 0.07  1.25 0 0 0 -0.47'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  container-type: inline-size;
+  background:
+    radial-gradient(130% 90% at 22% 12%, rgba(255, 238, 196, 0.42), transparent 55%),
+    radial-gradient(90% 70% at 90% 100%, rgba(120, 70, 20, 0.18), transparent 60%),
+    var(--wood-grain) center / 100% 100%,
+    linear-gradient(135deg, #e8c07c 0%, #dcab66 46%, #cf9a54 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 222, 0.75),
+    inset 0 -2px 4px rgba(90, 50, 10, 0.25),
+    inset 0 0 0 1px rgba(110, 65, 20, 0.35),
+    0 1px 0 #a8743a,
+    0 2px 0 #9e6b34,
+    0 3px 0 #94632f,
+    0 4px 0 #8a5b2a,
+    0 5px 0 #7f5225,
+    0 6px 0 #744920,
+    var(--board-drop);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.board-coords {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  color: rgba(74, 42, 10, 0.68);
+  font: 600 clamp(8px, 1.65cqi, 13px) / 1 var(--font-latin);
+  pointer-events: none;
+}
+
+.board-coords.cols {
+  top: 0;
+  left: var(--pad);
+  right: var(--pad);
+  height: var(--pad);
+  grid-template-columns: repeat(var(--n), 1fr);
+}
+
+.board-coords.rows {
+  top: var(--pad);
+  bottom: var(--pad);
+  left: 0;
+  width: var(--pad);
+  grid-template-rows: repeat(var(--n), 1fr);
+}
+
+.board-inner {
+  position: absolute;
+  inset: var(--pad);
+}
+
+.board-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.board-lines line,
+.board-frame {
+  fill: none;
+  stroke: rgba(52, 29, 6, 0.78);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+}
+
+.board-frame {
+  stroke-width: 2px;
+}
+
+.board-lines circle {
+  fill: rgba(52, 29, 6, 0.88);
+}
+
+.board-cells {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--n), 1fr);
+  grid-template-rows: repeat(var(--n), 1fr);
+}
+
+.cell {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cell.playable {
+  cursor: pointer;
+}
+
+.cell:focus-visible::before {
+  content: '';
+  position: absolute;
+  inset: 12%;
+  z-index: 3;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--seal-2);
+}
+
+/* ── Stones ──────────────────────────────────────────────────────── */
+
+.stone {
+  position: absolute;
+  inset: 4.5%;
+  z-index: 1;
+  border-radius: 50%;
+}
+
+.stone.black {
+  background: radial-gradient(circle at 34% 30%, #77777c 0%, #36363c 17%, #141417 48%, #040405 100%);
+  box-shadow:
+    0 0.18cqi 0.25cqi rgba(0, 0, 0, 0.5),
+    0.32cqi 0.6cqi 0.8cqi rgba(40, 18, 0, 0.38);
+}
+
+.stone.white {
+  background: radial-gradient(circle at 34% 30%, #ffffff 0%, #f9f7f2 26%, #e8e4db 64%, #cbc4b6 100%);
+  box-shadow:
+    inset -0.15cqi -0.25cqi 0.5cqi rgba(110, 95, 70, 0.25),
+    0 0.18cqi 0.25cqi rgba(0, 0, 0, 0.32),
+    0.32cqi 0.6cqi 0.8cqi rgba(40, 18, 0, 0.3);
+}
+
+/* Clamshell striations on white stones. */
+.stone.white::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: repeating-radial-gradient(circle at 125% 50%, transparent 0 0.7cqi, rgba(150, 135, 110, 0.05) 0.7cqi 0.95cqi);
+}
+
+/* Last move: vermilion dot + drop-in + a ripple across the wood. */
+.stone.last::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24%;
+  height: 24%;
+  border-radius: 50%;
+  background: var(--seal-2);
+  box-shadow:
+    0 0 0 0.18cqi rgba(255, 255, 255, 0.3),
+    0 0 0.9cqi rgba(255, 110, 80, 0.85);
+  transform: translate(-50%, -50%);
+}
+
+.board.show-order .stone.last::after {
+  display: none;
+}
+
+.stone.last {
+  animation: stone-drop 0.34s cubic-bezier(0.25, 0.9, 0.3, 1.25) both;
+}
+
+@keyframes stone-drop {
+  0% {
+    opacity: 0;
+    transform: translate(-8%, -20%) scale(1.28);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(0, 0) scale(0.96);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+.ripple {
+  position: absolute;
+  inset: 4.5%;
+  z-index: 0;
+  border-radius: 50%;
+  border: 0.35cqi solid rgba(255, 248, 228, 0.95);
+  pointer-events: none;
+  animation: ripple 0.8s 0.14s ease-out both;
+}
+
+@keyframes ripple {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.4);
+  }
+}
+
+.stone-num {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  font: 700 clamp(7px, 2.15cqi, 15px) / 1 var(--font-latin);
+  font-variant-numeric: tabular-nums;
+}
+
+.stone.black .stone-num {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.stone.white .stone-num {
+  color: rgba(35, 28, 20, 0.85);
+}
+
+.stone.last .stone-num {
+  color: var(--seal-2);
+}
+
+/* Ghost preview under the pointer / keyboard focus / armed touch point. */
+.stone.ghost {
+  opacity: 0;
+  box-shadow: none;
+  pointer-events: none;
+  transform: scale(0.9);
+  transition:
+    opacity 0.15s,
+    transform 0.15s var(--ease-out);
+}
+
+.stone.ghost::before {
+  display: none;
+}
+
+@media (hover: hover) {
+  .cell.playable:hover .stone.ghost {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+}
+
+.cell.playable:focus-visible .stone.ghost {
+  opacity: 0.45;
+  transform: scale(1);
+}
+
+.cell.armed .stone.ghost {
+  opacity: 0.75;
+  transform: scale(1);
+  animation: armed 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes armed {
+  to {
+    opacity: 0.4;
+  }
+}
+
+/* ── Winning five ────────────────────────────────────────────────── */
+
+.stone.win {
+  animation: win-glow 1.8s ease-in-out 0.9s infinite;
+}
+
+.stone.last.win {
+  animation:
+    stone-drop 0.34s cubic-bezier(0.25, 0.9, 0.3, 1.25) both,
+    win-glow 1.8s ease-in-out 0.9s infinite;
+}
+
+@keyframes win-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0.25cqi rgba(255, 214, 130, 0.6),
+      0 0 1.6cqi 0.4cqi rgba(255, 170, 80, 0.55);
+  }
+  50% {
+    box-shadow:
+      0 0 0 0.4cqi rgba(255, 228, 160, 0.9),
+      0 0 3.2cqi 0.9cqi rgba(255, 170, 80, 0.8);
+  }
+}
+
+.board-winline {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 0 4px rgba(255, 200, 110, 0.95)) drop-shadow(0 0 14px rgba(255, 130, 70, 0.55));
+}
+
+.board-winline line {
+  stroke-width: 0.16;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  opacity: 0.92;
+  animation: draw-line 0.8s 0.2s cubic-bezier(0.65, 0, 0.25, 1) forwards;
+}
+
+@keyframes draw-line {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.board.finished .stone:not(.win) {
+  filter: saturate(0.85) brightness(0.93);
+  transition: filter 0.6s;
+}

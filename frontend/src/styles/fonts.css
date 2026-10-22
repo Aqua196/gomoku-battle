@@ -1,0 +1,22 @@
+/*
+ * Serif headings: Noto Serif SC (SIL OFL 1.1) subset to the fixed heading
+ * copy only — ~9 KB per weight. Regenerate with scripts/subset-serif-font.py
+ * after adding serif text; glyphs outside the subset fall back to the
+ * system serif stack in --font-serif.
+ */
+
+@font-face {
+  font-family: 'Gomoku Serif';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('../assets/fonts/noto-serif-sc-700.subset.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Gomoku Serif';
+  font-style: normal;
+  font-weight: 800 900;
+  font-display: swap;
+  src: url('../assets/fonts/noto-serif-sc-900.subset.woff2') format('woff2');
+}

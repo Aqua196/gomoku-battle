@@ -8,7 +8,7 @@ const LABEL: Record<ConnectionStatus, string> = {
   disconnected: '已断开',
 }
 
-/** Connection status pill shown in lobby and game headers. */
+/** Connection status pill with live round-trip latency. */
 export function ConnBadge({
   status,
   latencyMs,
@@ -16,12 +16,18 @@ export function ConnBadge({
   status: ConnectionStatus
   latencyMs: number | null
 }) {
+  const quality =
+    status !== 'connected' || latencyMs == null ? '' : latencyMs < 80 ? 'good' : latencyMs < 200 ? 'fair' : 'poor'
   return (
-    <span className={`conn ${status}`} title={latencyMs != null ? `延迟 ${latencyMs} ms` : undefined}>
-      <i className="dot" />
-      {LABEL[status]}
-      {status === 'connected' && latencyMs != null && (
-        <span className="latency">{latencyMs}ms</span>
+    <span
+      className={`conn ${status} ${quality}`}
+      title={latencyMs != null ? `往返延迟 ${latencyMs} ms` : undefined}
+    >
+      <i className="conn-dot" />
+      {status === 'connected' && latencyMs != null ? (
+        <span className="conn-latency">{latencyMs}ms</span>
+      ) : (
+        LABEL[status]
       )}
     </span>
   )

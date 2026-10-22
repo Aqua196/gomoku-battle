@@ -1,0 +1,511 @@
+.game {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  align-items: start;
+  gap: clamp(20px, 3vw, 44px);
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: clamp(16px, 3vh, 32px) clamp(12px, 3vw, 40px) 40px;
+}
+
+.board-stage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  animation: fade-in 0.6s both;
+}
+
+.board-stage .board {
+  width: min(100%, calc(100dvh - 150px), 820px);
+}
+
+/* Warm halo under the board while it is your move. */
+.board-stage::before {
+  content: '';
+  position: absolute;
+  inset: 4% 10%;
+  border-radius: 40px;
+  background: radial-gradient(closest-side, var(--glow-seal), transparent);
+  filter: blur(40px);
+  opacity: 0;
+  transition: opacity 0.6s;
+}
+
+.my-turn .board-stage::before {
+  opacity: 1;
+}
+
+.stage-banners {
+  position: absolute;
+  top: 3%;
+  left: 50%;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.stage-banner {
+  padding: 9px 16px;
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  animation: toast-in 0.4s var(--ease-spring);
+  transform: none;
+}
+
+.stage-banner.danger {
+  background: color-mix(in srgb, var(--danger) 88%, #000);
+}
+
+.stage-banner.ok {
+  background: color-mix(in srgb, var(--ok) 90%, #000);
+}
+
+.stage-bar {
+  display: block;
+  height: 3px;
+  margin-top: 7px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.25);
+  overflow: hidden;
+}
+
+.stage-bar i {
+  display: block;
+  height: 100%;
+  background: #fff;
+  transition: width 0.2s linear;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+
+.game-side {
+  position: sticky;
+  top: 84px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: rise 0.5s 0.1s var(--ease-out) both;
+}
+
+.side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 4px 6px;
+}
+
+.side-room {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.side-label {
+  font: 700 17px/1 var(--font-serif);
+  letter-spacing: 0.12em;
+}
+
+.side-room code {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.side-moves {
+  color: var(--text-2);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.side-moves b {
+  color: var(--text);
+  font: 600 18px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.player-panel {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  transition:
+    border-color 0.3s,
+    box-shadow 0.3s,
+    background 0.3s,
+    opacity 0.3s;
+}
+
+.player-panel.active {
+  border-color: color-mix(in srgb, var(--gold) 50%, transparent);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--gold) 11%, transparent), transparent 80%),
+    var(--panel);
+  box-shadow: 0 14px 34px -22px color-mix(in srgb, var(--gold) 90%, transparent);
+}
+
+.player-panel.you.active {
+  border-color: color-mix(in srgb, var(--seal) 55%, transparent);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--seal) 13%, transparent), transparent 80%),
+    var(--panel);
+  box-shadow: 0 14px 34px -22px var(--glow-seal);
+}
+
+.player-panel.offline {
+  opacity: 0.8;
+}
+
+.player-panel.offline .avatar-stone {
+  filter: grayscale(1) opacity(0.55);
+}
+
+.timer-ring {
+  position: relative;
+  flex: none;
+  width: 54px;
+  height: 54px;
+}
+
+.timer-ring svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+.timer-track {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 5;
+}
+
+.timer-fill {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 5;
+  stroke-linecap: round;
+  transition:
+    stroke-dashoffset 0.2s linear,
+    stroke 0.3s;
+}
+
+.player-panel.you .timer-fill {
+  stroke: var(--seal-2);
+}
+
+.timer-ring.danger .timer-fill {
+  stroke: var(--danger);
+}
+
+.timer-ring.danger {
+  animation: ring-pulse 1s ease-in-out infinite;
+}
+
+@keyframes ring-pulse {
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+.timer-ring-body {
+  position: absolute;
+  inset: 8px;
+}
+
+.timer-ring-body .avatar-stone {
+  width: 100%;
+  height: 100%;
+}
+
+.pp-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.pp-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pp-nick {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pp-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.pp-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pp-presence i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+.pp-presence.off {
+  color: var(--danger);
+}
+
+.pp-presence.off i {
+  background: var(--danger);
+  animation: blink 0.9s infinite;
+}
+
+.pp-sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--text-3);
+  opacity: 0.6;
+}
+
+.pp-clock {
+  min-width: 46px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.pp-clock b {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.pp-clock small {
+  margin-left: 2px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.pp-clock.danger b {
+  color: var(--danger);
+}
+
+.pp-offline {
+  color: var(--danger);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.turn-status {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px 15px;
+  border-radius: 14px;
+  border: 1px dashed var(--line-strong);
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.turn-status.mine {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--seal) 55%, transparent);
+  background: color-mix(in srgb, var(--seal) 10%, transparent);
+  color: var(--text);
+}
+
+.turn-stone {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+
+.turn-stone.black {
+  background: radial-gradient(circle at 34% 30%, #77777c, #1a1a1d 50%, #000);
+}
+
+.turn-stone.white {
+  background: radial-gradient(circle at 34% 30%, #fff, #e3dfd6 60%, #b9b2a4);
+}
+
+.turn-stone.none {
+  display: none;
+}
+
+.turn-bar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--line);
+}
+
+.turn-bar i {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+  transition:
+    width 0.2s linear,
+    background 0.3s;
+}
+
+.turn-status.mine .turn-bar i {
+  background: var(--seal-2);
+}
+
+.turn-bar i.danger {
+  background: var(--danger);
+}
+
+.thinking-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.thinking-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: dot-bounce 1.2s infinite;
+}
+
+.thinking-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.thinking-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.side-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.side-hint {
+  margin: 2px 4px 0;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.review-bar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  z-index: 30;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: calc(100vw - 24px);
+  padding: 8px 8px 8px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel-solid);
+  box-shadow: var(--shadow-lg);
+  transform: translateX(-50%);
+  animation: fade-in 0.3s both;
+}
+
+.review-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 6px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.no-game {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--text-2);
+}
+
+/* Narrow screens: opponent above the board, you below — the sidebar's
+   children join the page flow via display: contents. */
+@media (max-width: 960px) {
+  .game {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 12px 28px;
+  }
+  .game-side {
+    display: contents;
+  }
+  .side-head {
+    order: 1;
+    padding: 0 4px;
+  }
+  .slot-top {
+    order: 2;
+  }
+  .board-stage {
+    order: 3;
+    margin: 4px 0 6px;
+  }
+  .board-stage .board {
+    width: min(100%, calc(100dvh - 330px), 640px);
+    min-width: min(100%, 300px);
+  }
+  .turn-status {
+    order: 4;
+  }
+  .slot-bottom {
+    order: 5;
+  }
+  .side-actions {
+    order: 6;
+  }
+  .side-hint {
+    display: none;
+  }
+  .player-panel {
+    padding: 10px 12px;
+  }
+  .timer-ring {
+    width: 46px;
+    height: 46px;
+  }
+  .timer-ring-body {
+    inset: 7px;
+  }
+}

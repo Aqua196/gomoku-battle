@@ -51,9 +51,23 @@ function ErrorToast() {
   }, [err, api])
   if (!err) return null
   return (
-    <div className="toast" role="alert" onClick={() => api.dismissError()}>
-      {ERROR_LABEL[err.code] ?? err.message}
-      {err.code !== 'not_implemented' && <span className="muted small"> ({err.code})</span>}
+    <div className="toast" role="alert" key={err.ts} onClick={() => api.dismissError()}>
+      <i className="toast-mark" />
+      <span>{ERROR_LABEL[err.code] ?? err.message}</span>
+      {err.code !== 'not_implemented' && <code className="toast-code">{err.code}</code>}
+    </div>
+  )
+}
+
+/** Thin top banner while an established session is re-connecting. */
+function ConnectionBanner() {
+  const { state } = useStore()
+  const { status, playerId } = state.session
+  if (!playerId || (status !== 'reconnecting' && status !== 'disconnected')) return null
+  return (
+    <div className="conn-banner" role="status">
+      <span className="conn-banner-spinner" />
+      连接中断，正在重连… 对局保留 30 秒
     </div>
   )
 }
@@ -70,6 +84,7 @@ export default function App() {
           </Routes>
           <Redirector />
           <ErrorToast />
+          <ConnectionBanner />
         </div>
       </StoreProvider>
     </BrowserRouter>
