@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
+import { blobPath, pointSeed, wobbleLine } from '../lib/ink'
 import { colLabel, pointLabel, rowLabel } from '../lib/notation'
 import type { Point } from '../lib/winLine'
 import type { Board as Cells, Color } from '../ws/protocol'
+import { InkCircle, InkStone } from './InkStone'
 
 const STAR_POINTS: readonly (readonly [number, number])[] = [
   [3, 3],
@@ -65,6 +67,16 @@ export function Board({ cells, lastMove, winLine, order, coords = true, interact
 
   const winSet = new Set(winLine?.map((p) => `${p.x},${p.y}`))
 
+  // Hand-drawn grid: every line wavers a little, seeded so it never jitters.
+  const grid = useMemo(() => {
+    const lines: string[] = []
+    for (let i = 0; i < n; i++) {
+      lines.push(wobbleLine(i * 2 + 1, 0.5, i + 0.5, n - 0.5, i + 0.5, 0.035, 8))
+      lines.push(wobbleLine(i * 2 + 2, i + 0.5, 0.5, i + 0.5, n - 0.5, 0.035, 8))
+    }
+    return lines
+  }, [n])
+
   const play = (x: number, y: number) => {
     if (!interaction?.enabled || cells[y][x] !== 0) return
     const key = `${x},${y}`
@@ -117,16 +129,12 @@ export function Board({ cells, lastMove, winLine, order, coords = true, interact
 
       <div className="board-inner">
         <svg className="board-lines" viewBox={`0 0 ${n} ${n}`} aria-hidden>
-          {cells.map((_, i) => (
-            <g key={i}>
-              <line x1={0.5} y1={i + 0.5} x2={n - 0.5} y2={i + 0.5} />
-              <line x1={i + 0.5} y1={0.5} x2={i + 0.5} y2={n - 0.5} />
-            </g>
+          {grid.map((d, i) => (
+            <path key={i} className={i < 2 || i >= grid.length - 2 ? 'edge' : undefined} d={d} />
           ))}
-          <rect className="board-frame" x={0.5} y={0.5} width={n - 1} height={n - 1} />
           {n === 15 &&
             STAR_POINTS.map(([x, y]) => (
-              <rect key={`${x},${y}`} className="board-star" x={x + 0.38} y={y + 0.38} width={0.24} height={0.24} />
+              <path key={`${x},${y}`} className="board-star" d={blobPath(pointSeed(x, y, 9), 0.1, 0.12, x + 0.5, y + 0.5, 12)} />
             ))}
         </svg>
 
@@ -163,6 +171,8 @@ export function Board({ cells, lastMove, winLine, order, coords = true, interact
                       .filter(Boolean)
                       .join(' ')}
                   >
+                    <InkStone color={cell === 1 ? 'black' : 'white'} seed={pointSeed(x, y, cell)} />
+                    {winSet.has(key) && <InkCircle seed={pointSeed(x, y, 5)} />}
                     {num !== undefined && <span className="stone-num">{num}</span>}
                   </span>
                 ) : null
@@ -171,7 +181,7 @@ export function Board({ cells, lastMove, winLine, order, coords = true, interact
                 return (
                   <div key={key} className="cell">
                     {stone}
-                    {isLast && <span className="reticle" />}
+                    {isLast && <span className="ripple" />}
                   </div>
                 )
               }
@@ -189,8 +199,12 @@ export function Board({ cells, lastMove, winLine, order, coords = true, interact
                   onClick={() => play(x, y)}
                 >
                   {stone}
-                  {isLast && <span className="reticle" />}
-                  {playable && interaction.color && <span className={`stone ghost ${interaction.color}`} />}
+                  {isLast && <span className="ripple" />}
+                  {playable && interaction.color && (
+                    <span className="stone ghost">
+                      <InkStone color={interaction.color} seed={pointSeed(x, y, interaction.color === 'black' ? 1 : 2)} />
+                    </span>
+                  )}
                 </button>
               )
             }),
@@ -199,17 +213,11 @@ export function Board({ cells, lastMove, winLine, order, coords = true, interact
 
         {first && last && (
           <svg className="board-winline" viewBox={`0 0 ${n} ${n}`} aria-hidden>
-            {['under', 'over'].map((layer) => (
-              <line
-                key={layer}
-                className={`winline-${layer}`}
-                x1={first.x + 0.5}
-                y1={first.y + 0.5}
-                x2={last.x + 0.5}
-                y2={last.y + 0.5}
-                pathLength={1}
-              />
-            ))}
+            <path
+              className="winline"
+              d={wobbleLine(pointSeed(first.x, first.y, 3), first.x + 0.5, first.y + 0.5, last.x + 0.5, last.y + 0.5, 0.06, 10)}
+              pathLength={1}
+            />
           </svg>
         )}
       </div>

@@ -1,5 +1,6 @@
 import type { Color, GameOverReason } from '../ws/protocol'
 import { Icon } from './Icon'
+import { Seal } from './Seal'
 
 const REASON_LABEL: Record<GameOverReason, string> = {
   five: '五连获胜',
@@ -10,25 +11,16 @@ const REASON_LABEL: Record<GameOverReason, string> = {
   abandoned: '双方断线超时',
 }
 
-const REASON_CODE: Record<GameOverReason, string> = {
-  five: 'FIVE IN A ROW',
-  draw: 'BOARD FULL',
-  timeout: 'TURN TIMEOUT',
-  resign: 'RESIGNATION',
-  disconnect_timeout: 'DISCONNECT TIMEOUT',
-  abandoned: 'BOTH DISCONNECTED',
-}
-
 type Outcome = 'win' | 'lose' | 'draw' | 'abandoned'
 
-const COPY: Record<Outcome, { title: string; seal: string; word: string }> = {
-  win: { title: '你赢了！', seal: '胜', word: 'Victory' },
-  lose: { title: '对手获胜', seal: '负', word: 'Defeat' },
-  draw: { title: '平局', seal: '和', word: 'Draw' },
-  abandoned: { title: '双方弃局', seal: '弃', word: 'Void' },
+const COPY: Record<Outcome, { title: string; glyph: string; seal: string; latin: string }> = {
+  win: { title: '你赢了！', glyph: '胜', seal: '大吉', latin: 'a game well won' },
+  lose: { title: '对手获胜', glyph: '负', seal: '再战', latin: 'the stones fell against you' },
+  draw: { title: '平局', glyph: '和', seal: '和局', latin: 'neither side yields' },
+  abandoned: { title: '双方弃局', glyph: '弃', seal: '空局', latin: 'the table was left empty' },
 }
 
-/** End-of-game verdict: a solid slab docked beside the board. */
+/** End-of-game verdict: a hanging scroll that unrolls from its centre. */
 export function ResultOverlay({
   reason,
   winner,
@@ -43,7 +35,7 @@ export function ResultOverlay({
   winner: Color | null
   youColor: Color | null
   moves: number
-  /** hold the verdict back so the winning line can draw first */
+  /** hold the scroll back so the winning stroke can draw first */
   delayed: boolean
   again: { label: string; run: () => void } | null
   onBack: () => void
@@ -60,58 +52,54 @@ export function ResultOverlay({
       aria-modal="true"
       aria-labelledby="result-title"
     >
-      <div className="slab">
-        <div className="slab-word en" aria-hidden>
-          {copy.word}
-        </div>
-        <div className="slab-head">
-          <span className="slab-seal" aria-hidden>
-            {copy.seal}
-          </span>
-          <div>
-            <p className="kicker">RESULT // {REASON_CODE[reason]}</p>
-            <h2 id="result-title" className="slab-title">
-              {copy.title}
-            </h2>
+      <div className="scroll">
+        <i className="rod top" aria-hidden />
+        <div className="scroll-paper">
+          <div className="scroll-glyph serif" aria-hidden>
+            {copy.glyph}
           </div>
-        </div>
-        <dl className="slab-spec">
-          <div>
-            <dt>结果</dt>
-            <dd>{REASON_LABEL[reason]}</dd>
+          <div className="scroll-seal">
+            <Seal text={copy.seal} size={46} seed={13} solid={outcome === 'win'} />
           </div>
-          <div>
-            <dt>手数</dt>
-            <dd className="mono">{String(moves).padStart(3, '0')}</dd>
-          </div>
-          <div>
-            <dt>执子</dt>
-            <dd>{youColor === 'white' ? '白' : '黑'}</dd>
-          </div>
-        </dl>
-        <div className="slab-actions">
-          {again && (
-            <button type="button" className="btn lg block primary" onClick={again.run}>
-              <span>
-                <Icon name="replay" size={16} />
-                {again.label}
-              </span>
-              <small className="en" aria-hidden>
-                Again
-              </small>
+          <h2 id="result-title" className="scroll-title serif">
+            {copy.title}
+          </h2>
+          <p className="scroll-latin latin">{copy.latin}</p>
+          <dl className="slab-spec">
+            <div>
+              <dt>结果</dt>
+              <dd>{REASON_LABEL[reason]}</dd>
+            </div>
+            <div>
+              <dt>手数</dt>
+              <dd className="latin">{moves}</dd>
+            </div>
+            <div>
+              <dt>执子</dt>
+              <dd className="serif">{youColor === 'white' ? '白' : '黑'}</dd>
+            </div>
+          </dl>
+          <div className="scroll-actions">
+            {again && (
+              <button type="button" className="btn block primary" onClick={again.run}>
+                <span>
+                  <Icon name="replay" size={16} />
+                  {again.label}
+                </span>
+                <small aria-hidden>again</small>
+              </button>
+            )}
+            <button type="button" className="btn block" onClick={onBack} autoFocus={!again}>
+              <span>返回大厅</span>
+              <small aria-hidden>lobby</small>
             </button>
-          )}
-          <button type="button" className={`btn lg block${again ? '' : ' primary'}`} onClick={onBack} autoFocus={!again}>
-            <span>返回大厅</span>
-            <small className="en" aria-hidden>
-              Lobby
-            </small>
+          </div>
+          <button type="button" className="link-btn" onClick={onReview}>
+            <Icon name="eye" size={15} />
+            查看终局棋盘
           </button>
         </div>
-        <button type="button" className="link-btn" onClick={onReview}>
-          <Icon name="eye" size={15} />
-          查看终局棋盘
-        </button>
+        <i className="rod bottom" aria-hidden />
       </div>
     </div>
   )

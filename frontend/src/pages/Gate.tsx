@@ -1,73 +1,66 @@
 import { useState } from 'react'
 import { HeroBoard } from '../components/HeroBoard'
-import { Icon } from '../components/Icon'
-import { Marquee } from '../components/Motion'
+import { InkScape } from '../components/InkScape'
 import { Rail } from '../components/Rail'
+import { Seal } from '../components/Seal'
+import { useMedia } from '../hooks/useMedia'
 import { useStore } from '../state/store'
 
-const SPEC: [string, string, string][] = [
-  ['规则', 'Rule', '自由规则 · 五连即胜'],
-  ['棋盘', 'Board', '15 × 15'],
-  ['同步', 'Sync', 'WebSocket · 服务端权威'],
-  ['对手', 'AI', 'α-β 剪枝 · 三档难度'],
-  ['重连', 'Resume', '30 秒内恢复原局'],
+const POINTS: [string, string][] = [
+  ['毫秒同步', '服务端权威判定'],
+  ['三档对手', 'α-β 剪枝搜索'],
+  ['断线续局', '三十秒内回到原局'],
 ]
 
-/** Landing page: system sheet + callsign entry beside the demo figure. */
+const d = (s: number) => ({ ['--d' as string]: `${s}s` })
+
+/** Landing page: an ink landscape, the title, a name to sign with, the demo board. */
 export function Gate() {
   const { state, api } = useStore()
   const { session } = state
   const [nick, setNick] = useState(session.nick)
   const connecting = session.status === 'connecting' || session.status === 'reconnecting'
+  // Stacked (narrow) layout: the board spans the width, leaving the sun nowhere to show.
+  const stacked = useMedia('(max-width: 1180px)')
 
   return (
     <div className="app-shell">
       <Rail />
       <main className="stage gate">
+        <InkScape className="gate-scape" sun={stacked ? null : undefined} />
+
         <section className="gate-copy">
           <p className="kicker reveal">
-            <span className="rec">
-              <i />
-              REC
-            </span>
-            <span>GOMOKU // REAL-TIME BATTLE SYSTEM</span>
+            <span>No.01</span>
+            <span className="latin">an ink &amp; stone game for two</span>
           </p>
-          <h1 className="gate-title">
-            <span className="reveal" style={{ ['--d' as string]: '0.08s' }}>
-              五子棋
-            </span>
-            <span className="reveal" style={{ ['--d' as string]: '0.18s' }}>
-              对战
-            </span>
+          <h1 className="gate-title serif reveal" style={d(0.1)}>
+            五子棋
           </h1>
-          <p className="gate-en en reveal" style={{ ['--d' as string]: '0.3s' }}>
-            Gomoku<span>//</span>Battle
+          <p className="gate-verse serif reveal" style={d(0.25)}>
+            黑白两色，纵横十五，五子连珠者胜。
           </p>
 
-          <dl className="spec">
-            {SPEC.map(([cn, en, value], i) => (
-              <div key={en} className="reveal" style={{ ['--d' as string]: `${0.36 + i * 0.05}s` }}>
-                <dt>
-                  {cn}
-                  <small className="en">{en}</small>
-                </dt>
-                <dd>{value}</dd>
-              </div>
+          <ol className="gate-points reveal" style={d(0.4)}>
+            {POINTS.map(([title, sub]) => (
+              <li key={title}>
+                <b className="serif">{title}</b>
+                <span>{sub}</span>
+              </li>
             ))}
-          </dl>
+          </ol>
 
           <form
             className="callsign reveal"
-            style={{ ['--d' as string]: '0.62s' }}
+            style={d(0.55)}
             onSubmit={(e) => {
               e.preventDefault()
               api.connect(nick)
             }}
           >
             <label className="field-label" htmlFor="callsign">
-              <span>代号</span>
-              <span className="en">Callsign</span>
-              <span className="mono">01–32</span>
+              <span>落款</span>
+              <span className="latin">sign your name</span>
             </label>
             <div className="callsign-row">
               <input
@@ -75,36 +68,28 @@ export function Gate() {
                 className="field-input"
                 value={nick}
                 onChange={(e) => setNick(e.target.value)}
-                placeholder="输入你的昵称"
+                placeholder="你的名号"
                 maxLength={32}
                 autoFocus
                 autoComplete="nickname"
               />
               <button className="btn primary lg" type="submit" disabled={!nick.trim() || connecting}>
-                <span>{connecting ? '连接中…' : '进入大厅'}</span>
-                <Icon name="arrowRight" size={16} />
+                <span>{connecting ? '连接中' : '入局'}</span>
+                <small aria-hidden>{connecting ? '…' : 'enter'}</small>
               </button>
             </div>
           </form>
         </section>
 
-        <section className="gate-visual" aria-hidden>
+        <section className="gate-visual reveal" style={d(0.3)} aria-hidden>
           <HeroBoard />
         </section>
 
-        <footer className="band" aria-hidden>
-          <Marquee speed={36}>
-            <span className="band-word en">Gomoku Battle</span>
-            <span className="band-dot" />
-            <span className="band-word cn">五子棋对战</span>
-            <span className="band-dot" />
-            <span className="band-word en outline">15×15 Freestyle</span>
-            <span className="band-dot" />
-          </Marquee>
-          <span className="band-meta mono">
-            SERVER-AUTHORITATIVE // WEBSOCKET // α-β SEARCH
-          </span>
-        </footer>
+        <aside className="gate-motto serif" aria-hidden>
+          <span>落子无悔</span>
+          <span>观棋不语</span>
+          <Seal text="弈" size={34} seed={8} solid={false} />
+        </aside>
       </main>
     </div>
   )

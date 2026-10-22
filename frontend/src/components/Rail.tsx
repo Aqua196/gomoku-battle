@@ -1,12 +1,13 @@
 import { useMetrics } from '../hooks/useMetrics'
 import { useStore } from '../state/store'
 import { ConnBadge } from './ConnBadge'
-import { Logo } from './Logo'
+import { Roll } from './Motion'
+import { Seal } from './Seal'
 import { SoundToggle, ThemeToggle } from './Toggles'
 
 /**
- * Left navigation rail (top bar on narrow screens): brand block, vertical
- * system label, live server counter, connection state and toggles.
+ * Left rail (top bar on narrow screens): vermilion seal, the title set
+ * vertically like a scroll label, the live player count and the toggles.
  */
 export function Rail({ showStats = true }: { showStats?: boolean }) {
   const { state } = useStore()
@@ -16,18 +17,20 @@ export function Rail({ showStats = true }: { showStats?: boolean }) {
   return (
     <aside className="rail">
       <div className="rail-logo">
-        <Logo size={34} />
+        <Seal text="弈" size={38} seed={3} />
       </div>
       <div className="rail-title" aria-hidden>
-        <span className="en">Gomoku Battle</span>
-        <span className="rail-sep" />
-        <span className="mono">SYS 15×15</span>
+        <span>五子棋</span>
+        <i className="rail-dot" />
+        <span className="latin">Gomoku</span>
       </div>
       <div className="rail-bottom">
         {metrics && metrics.connections > 0 && (
           <div className="rail-stat" title="实时服务端指标 /metrics">
-            <b className="mono">{String(metrics.connections).padStart(2, '0')}</b>
-            <span className="en">Online</span>
+            <b>
+              <Roll value={metrics.connections} />
+            </b>
+            <span>在线</span>
           </div>
         )}
         {session.status !== 'idle' && <ConnBadge status={session.status} latencyMs={session.latencyMs} />}
