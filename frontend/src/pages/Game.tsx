@@ -4,7 +4,7 @@ import { Board } from '../components/Board'
 import { Icon } from '../components/Icon'
 import { PlayerPanel } from '../components/PlayerPanel'
 import { ResultOverlay } from '../components/ResultOverlay'
-import { TopBar } from '../components/TopBar'
+import { Rail } from '../components/Rail'
 import { useMoveOrder } from '../hooks/useMoveOrder'
 import { useNow } from '../hooks/useNow'
 import { usePrefs } from '../hooks/usePrefs'
@@ -28,12 +28,12 @@ export function Game() {
   const game = state.game.game
   if (!game) {
     return (
-      <div className="page game-page">
-        <TopBar showStats={false} />
-        <main className="no-game">
-          <p>当前没有进行中的对局。</p>
+      <div className="app-shell">
+        <Rail showStats={false} />
+        <main className="stage no-game">
+          <p className="mono">NO ACTIVE MATCH // 当前没有进行中的对局</p>
           <button className="btn primary" onClick={() => navigate('/')}>
-            返回大厅
+            <span>返回大厅</span>
           </button>
         </main>
       </div>
@@ -155,14 +155,19 @@ function GameView({ game }: { game: GameState }) {
     )
   }
 
+  const pad3 = (n: number) => String(n).padStart(3, '0')
+  const turnState = over || !playing ? 'over' : myTurn ? 'mine' : aiThinking ? 'ai' : 'wait'
+  const TURN_EN = { over: 'Match End', mine: 'Your Turn', ai: 'AI Computing', wait: 'Opponent' }
+
   return (
-    <div className={`page game-page${myTurn ? ' my-turn' : ''}`}>
-      <TopBar showStats={false} />
-      <main className="game">
+    <div className={`app-shell${myTurn ? ' my-turn' : ''}${over && !reviewing ? ' show-result' : ''}`}>
+      <Rail showStats={false} />
+      <main className="stage game">
         <section className="board-stage">
           <div className="stage-banners" aria-live="polite">
             {!oppOnline && playing && (
-              <div className="stage-banner danger">
+              <div className="stage-banner alert">
+                <span className="stripes" aria-hidden />
                 <span>
                   对手断线{oppLeft !== null && <>，{Math.ceil(oppLeft / 1000)}s 内未重连判负</>}
                 </span>
@@ -175,58 +180,63 @@ function GameView({ game }: { game: GameState }) {
             )}
             {showReconnected && oppOnline && <div className="stage-banner ok">对手已重连</div>}
           </div>
-          <Board
-            cells={game.board}
-            lastMove={game.lastMove}
-            winLine={winLine}
-            order={prefs.showOrder ? order : null}
-            interaction={{
-              enabled: myTurn && session.status === 'connected',
-              color: youColor,
-              onPlay: play,
-            }}
-            className={over ? 'finished' : undefined}
-          />
+          <div className="board-wrap bracketed">
+            <Board
+              cells={game.board}
+              lastMove={game.lastMove}
+              winLine={winLine}
+              order={prefs.showOrder ? order : null}
+              interaction={{
+                enabled: myTurn && session.status === 'connected',
+                color: youColor,
+                onPlay: play,
+              }}
+              className={over ? 'finished' : undefined}
+            />
+          </div>
+          <div className="board-meta mono" aria-hidden>
+            <span>#{game.roomId.slice(-6).toUpperCase()}</span>
+            <span>15×15 // FREESTYLE</span>
+            <span>
+              MOVE <b>{pad3(game.moveNumber)}</b> / 225
+            </span>
+          </div>
         </section>
 
         <aside className="game-side">
-          <div className="side-head">
-            <div className="side-room">
-              <span className="side-label">对局</span>
-              <code>#{game.roomId.slice(-6)}</code>
-              {aiBadge && <em className="tag ai">{aiBadge}</em>}
+          <header className="side-head">
+            <span className="sec-no mono">02</span>
+            <div className="sec-title">
+              <h1>对局</h1>
+              <p className="en">Match</p>
             </div>
-            <span className="side-moves">
-              第 <b>{game.moveNumber}</b> 手
-            </span>
-          </div>
+            <div className="side-meta">
+              {aiBadge && <em className="tag ai">{aiBadge}</em>}
+              <span className="side-moves">
+                第 <b className="mono">{game.moveNumber}</b> 手
+              </span>
+            </div>
+          </header>
 
           <div className="slot-top">{panel(topColor)}</div>
 
-          <div className={`turn-status${myTurn ? ' mine' : ''}${over ? ' over' : ''}`} aria-live="polite">
-            <i className={`turn-stone ${over ? 'none' : game.turn}`} />
-            {over || !playing ? (
+          <div className={`turn-status ${turnState}`} aria-live="polite">
+            {turnState === 'over' ? (
               <span className="turn-text">对局结束</span>
-            ) : myTurn ? (
+            ) : turnState === 'mine' ? (
               <span className="turn-text">你的回合</span>
-            ) : aiThinking ? (
+            ) : turnState === 'ai' ? (
               <span className="turn-text">AI 思考中</span>
             ) : (
               <span className="turn-text">对手思考中</span>
             )}
-            {aiThinking && (
+            <span className="turn-en en">{TURN_EN[turnState]}</span>
+            {turnState === 'mine' && <i className="turn-caret" aria-hidden />}
+            {turnState === 'ai' && (
               <span className="thinking-dots" aria-hidden>
                 <i />
                 <i />
                 <i />
-              </span>
-            )}
-            {turnLeft !== null && (
-              <span className="turn-bar" aria-hidden>
-                <i
-                  className={turnLeft <= 10_000 ? 'danger' : ''}
-                  style={{ width: `${(turnLeft / MOVE_TIMEOUT_MS) * 100}%` }}
-                />
               </span>
             )}
           </div>
@@ -236,17 +246,17 @@ function GameView({ game }: { game: GameState }) {
           <div className="side-actions">
             <button
               type="button"
-              className={`btn ghost sm toggle${prefs.showOrder ? ' on' : ''}`}
+              className={`btn sm toggle${prefs.showOrder ? ' on' : ''}`}
               aria-pressed={prefs.showOrder}
               onClick={() => setPref('showOrder', !prefs.showOrder)}
             >
-              <Icon name="hash" size={16} />
-              手数
+              <Icon name="hash" size={15} />
+              <span>手数</span>
             </button>
             {playing && (
               <button
                 type="button"
-                className={`btn sm ${confirmResign ? 'danger' : 'ghost'}`}
+                className={`btn sm${confirmResign ? ' danger' : ''}`}
                 onClick={() => {
                   if (confirmResign) {
                     api.resign()
@@ -256,12 +266,12 @@ function GameView({ game }: { game: GameState }) {
                   }
                 }}
               >
-                <Icon name="flag" size={16} />
-                {confirmResign ? '确认认输？' : '认输'}
+                <Icon name="flag" size={15} />
+                <span>{confirmResign ? '确认认输？' : '认输'}</span>
               </button>
             )}
           </div>
-          <p className="side-hint">提示：方向键移动、回车落子；触屏点两下确认落子。</p>
+          <p className="side-hint mono">KEYS // 方向键移动 · 回车落子 · 触屏点两下确认</p>
         </aside>
       </main>
 
@@ -279,18 +289,17 @@ function GameView({ game }: { game: GameState }) {
       )}
       {over && reviewing && (
         <div className="review-bar">
-          <span className="review-label">
-            <Icon name="eye" size={16} />
-            终局 · 共 {game.moveNumber} 手
+          <span className="review-label mono">
+            REVIEW // 终局 · 共 {game.moveNumber} 手
           </span>
-          <button type="button" className="btn ghost sm" onClick={() => setReviewing(false)}>
-            结算
+          <button type="button" className="btn sm" onClick={() => setReviewing(false)}>
+            <span>结算</span>
           </button>
-          <button type="button" className="btn ghost sm" onClick={again.run}>
-            {again.label}
+          <button type="button" className="btn sm" onClick={again.run}>
+            <span>{again.label}</span>
           </button>
-          <button type="button" className="btn primary sm" onClick={backToLobby}>
-            返回大厅
+          <button type="button" className="btn sm primary" onClick={backToLobby}>
+            <span>返回大厅</span>
           </button>
         </div>
       )}

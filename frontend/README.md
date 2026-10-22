@@ -18,23 +18,16 @@ npm test           # vitest (protocol parser / backoff / reducer / win line / pa
 - `src/ws/protocol.ts` — C→S / S→C message types, Room, GameState, error codes
 - `src/ws/client.ts` — WS client: hello, exponential-backoff reconnect (hello carries stored token), app-level ping, message dispatch
 - `src/state/store.tsx` — React context + reducer: session / lobby / game state machine
-- `src/pages/Gate.tsx` — landing page: nickname entry beside a self-playing 3D board (`components/HeroBoard.tsx`)
-- `src/pages/Lobby.tsx` — quick match (radar + wait timer), AI difficulty tiles, create room, live room cards
-- `src/pages/Game.tsx` — board, player panels with countdown rings, turn status, resign, result card, final-board review
-- `src/components/Board.tsx` — wooden board: SVG grid, stones, last-move ripple, win line, move numbers; arrow keys + Enter to play, two-tap confirm on touch screens
+- `src/components/Rail.tsx` — app shell rail (left on desktop, top bar on phones): brand, live `/metrics` counter, connection, toggles
+- `src/pages/Gate.tsx` — landing page: system spec sheet + callsign entry beside a self-playing demo board (`components/HeroBoard.tsx`)
+- `src/pages/Lobby.tsx` — quick match (wait timer + queue position), AI difficulty rows, create room, room table
+- `src/pages/Game.tsx` — board, player spec panels with segmented turn clocks, turn status, resign, result slab, final-board review
+- `src/components/Board.tsx` — flat technical board: SVG grid, stones, last-move reticle, win line, move numbers; arrow keys + Enter to play, two-tap confirm on touch screens
 - `src/lib/` — pure helpers: win-line detection, board notation, device prefs (theme / sound / move numbers), WebAudio sound effects
-- `src/styles/` — design tokens (dark "ink" / light "paper" themes) and per-area stylesheets
+- `src/styles/` — design tokens (industrial light / dark themes, one signal yellow, square corners) and per-area stylesheets
+
+Latin display (Barlow Condensed) and mono (JetBrains Mono) fonts are self-hosted from `@fontsource` (Latin subset only); Chinese uses the system sans stack.
 
 `nick` / `token` persist in `localStorage` (`gomoku.nick` / `gomoku.token`), UI preferences in `gomoku.theme` / `gomoku.sound` / `gomoku.showOrder`.
-
-### Heading font
-
-Serif headings use Noto Serif SC (SIL OFL 1.1) subset to the fixed heading copy, ~9 KB per weight in `src/assets/fonts/`.
-After adding serif text, add its characters to `CHARS` in `scripts/subset-serif-font.py` and regenerate:
-
-```bash
-npm pack @fontsource/noto-serif-sc@5.3.1 && tar xzf fontsource-noto-serif-sc-5.3.1.tgz
-pip install fonttools brotli && python3 scripts/subset-serif-font.py package
-```
 
 In dev builds, `window.__gomoku(serverMsg)` injects a server message into the store for manual testing without a backend.

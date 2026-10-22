@@ -1,93 +1,86 @@
-/* Design tokens — "ink & wood": ink-dark by default, rice paper in light. */
+/*
+ * Design tokens — industrial terminal: flat surfaces, square corners, one
+ * signal yellow. Light is the default "field manual" look; dark follows the
+ * night variant. No gradients, glows or rounded cards anywhere.
+ */
 
 :root {
-  color-scheme: dark;
-  --bg: #0d0e12;
-  --bg-2: #121318;
-  --panel: rgba(255, 255, 255, 0.035);
-  --panel-hi: rgba(255, 255, 255, 0.065);
-  --panel-solid: #17181e;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.15);
-  --text: #eeeae2;
-  --text-2: #a9a399;
-  --text-3: #716b63;
-  --seal: #e2553f;
-  --seal-2: #ff7657;
-  --gold: #dcaa4a;
-  --ok: #4cbf8a;
-  --warn: #e3a33b;
-  --danger: #ef5a4c;
-  --ai: #8fb4ff;
-  --glow-seal: rgba(226, 85, 63, 0.38);
-  --shadow-md: 0 12px 32px -14px rgba(0, 0, 0, 0.65);
-  --shadow-lg: 0 34px 80px -28px rgba(0, 0, 0, 0.75), 0 12px 30px -12px rgba(0, 0, 0, 0.5);
-  --board-drop: 0 28px 54px -14px rgba(0, 0, 0, 0.6), 0 60px 100px -40px rgba(0, 0, 0, 0.65);
-  --grain-opacity: 0.06;
+  color-scheme: light;
+  --bg: #eeeeea;
+  --surface: #f7f7f4;
+  --surface-2: #ffffff;
+  --ink: #191919;
+  --ink-2: #4d4d4d;
+  --ink-3: #7e7e7e;
+  --ink-4: #b8b8b8;
+  --line: #d3d3cd;
+  --accent: #fffa00;
+  --on-accent: #191919;
+  --cyan: #0f9fd8;
+  --alert: #f0382b;
+  --ok: #17a464;
 
-  --radius: 20px;
-  --radius-sm: 12px;
-  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --board: #f9f8f3;
+  --board-line: #9a9a94;
+  --stone-black: #191919;
+  --stone-white: #ffffff;
+  --black-edge: transparent;
+  --white-edge: #191919;
 
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
-    'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans CJK SC', sans-serif;
-  --font-serif: 'Gomoku Serif', 'Songti SC', 'STSong', 'Noto Serif SC', 'Noto Serif CJK SC', 'Source Han Serif SC',
-    'SimSun', Georgia, serif;
-  --font-latin: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
-  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  --font-cn: 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans CJK SC',
+    'Source Han Sans SC', system-ui, sans-serif;
+  --font-en: 'Barlow Condensed', var(--font-cn);
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --ease: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --rail: 76px;
 }
 
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) {
-    color-scheme: light;
-    --bg: #f3eee4;
-    --bg-2: #ebe3d5;
-    --panel: rgba(255, 255, 255, 0.55);
-    --panel-hi: rgba(255, 255, 255, 0.85);
-    --panel-solid: #fbf8f2;
-    --line: rgba(70, 45, 20, 0.1);
-    --line-strong: rgba(70, 45, 20, 0.2);
-    --text: #1f1b16;
-    --text-2: #5f574b;
-    --text-3: #93897a;
-    --seal: #c8432d;
-    --seal-2: #e0573b;
-    --gold: #b5832a;
-    --ok: #2f9e6b;
-    --warn: #c58419;
-    --danger: #d2402f;
-    --ai: #3a66c8;
-    --glow-seal: rgba(200, 67, 45, 0.3);
-    --shadow-md: 0 12px 30px -16px rgba(90, 55, 20, 0.35);
-    --shadow-lg: 0 34px 70px -30px rgba(90, 55, 20, 0.4), 0 10px 30px -14px rgba(90, 55, 20, 0.22);
-    --board-drop: 0 28px 54px -18px rgba(90, 55, 20, 0.45), 0 60px 100px -44px rgba(90, 55, 20, 0.4);
-    --grain-opacity: 0.08;
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #0f1012;
+    --surface: #15161a;
+    --surface-2: #1b1c20;
+    --ink: #ececea;
+    --ink-2: #b8b8b8;
+    --ink-3: #7e7e7e;
+    --ink-4: #4d4d4d;
+    --line: #2a2b30;
+    --on-accent: #111111;
+    --cyan: #2cc3f5;
+    --alert: #ff4d3d;
+    --ok: #2fd08a;
+
+    --board: #17181b;
+    --board-line: #46474c;
+    --stone-black: #050505;
+    --stone-white: #ececea;
+    --black-edge: rgba(236, 236, 234, 0.55);
+    --white-edge: transparent;
   }
 }
 
-:root[data-theme='light'] {
-  color-scheme: light;
-  --bg: #f3eee4;
-  --bg-2: #ebe3d5;
-  --panel: rgba(255, 255, 255, 0.55);
-  --panel-hi: rgba(255, 255, 255, 0.85);
-  --panel-solid: #fbf8f2;
-  --line: rgba(70, 45, 20, 0.1);
-  --line-strong: rgba(70, 45, 20, 0.2);
-  --text: #1f1b16;
-  --text-2: #5f574b;
-  --text-3: #93897a;
-  --seal: #c8432d;
-  --seal-2: #e0573b;
-  --gold: #b5832a;
-  --ok: #2f9e6b;
-  --warn: #c58419;
-  --danger: #d2402f;
-  --ai: #3a66c8;
-  --glow-seal: rgba(200, 67, 45, 0.3);
-  --shadow-md: 0 12px 30px -16px rgba(90, 55, 20, 0.35);
-  --shadow-lg: 0 34px 70px -30px rgba(90, 55, 20, 0.4), 0 10px 30px -14px rgba(90, 55, 20, 0.22);
-  --board-drop: 0 28px 54px -18px rgba(90, 55, 20, 0.45), 0 60px 100px -44px rgba(90, 55, 20, 0.4);
-  --grain-opacity: 0.08;
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0f1012;
+  --surface: #15161a;
+  --surface-2: #1b1c20;
+  --ink: #ececea;
+  --ink-2: #b8b8b8;
+  --ink-3: #7e7e7e;
+  --ink-4: #4d4d4d;
+  --line: #2a2b30;
+  --on-accent: #111111;
+  --cyan: #2cc3f5;
+  --alert: #ff4d3d;
+  --ok: #2fd08a;
+
+  --board: #17181b;
+  --board-line: #46474c;
+  --stone-black: #050505;
+  --stone-white: #ececea;
+  --black-edge: rgba(236, 236, 234, 0.55);
+  --white-edge: transparent;
 }

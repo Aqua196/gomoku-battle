@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react'
 import type { Color, GameOverReason } from '../ws/protocol'
 import { Icon } from './Icon'
 
@@ -11,23 +10,25 @@ const REASON_LABEL: Record<GameOverReason, string> = {
   abandoned: '双方断线超时',
 }
 
-type Outcome = 'win' | 'lose' | 'draw' | 'abandoned'
-
-const COPY: Record<Outcome, { title: string; seal: string }> = {
-  win: { title: '你赢了！', seal: '胜' },
-  lose: { title: '对手获胜', seal: '负' },
-  draw: { title: '平局', seal: '和' },
-  abandoned: { title: '双方弃局', seal: '弃' },
+const REASON_CODE: Record<GameOverReason, string> = {
+  five: 'FIVE IN A ROW',
+  draw: 'BOARD FULL',
+  timeout: 'TURN TIMEOUT',
+  resign: 'RESIGNATION',
+  disconnect_timeout: 'DISCONNECT TIMEOUT',
+  abandoned: 'BOTH DISCONNECTED',
 }
 
-// Deterministic burst so renders stay pure: angle / distance / delay per particle.
-const PARTICLES = Array.from({ length: 26 }, (_, i) => ({
-  a: (i / 26) * 360 + ((i * 37) % 11),
-  d: 120 + ((i * 53) % 90),
-  delay: (i % 5) * 40,
-  gold: i % 3 !== 0,
-}))
+type Outcome = 'win' | 'lose' | 'draw' | 'abandoned'
 
+const COPY: Record<Outcome, { title: string; seal: string; word: string }> = {
+  win: { title: '你赢了！', seal: '胜', word: 'Victory' },
+  lose: { title: '对手获胜', seal: '负', word: 'Defeat' },
+  draw: { title: '平局', seal: '和', word: 'Draw' },
+  abandoned: { title: '双方弃局', seal: '弃', word: 'Void' },
+}
+
+/** End-of-game verdict: a solid slab docked beside the board. */
 export function ResultOverlay({
   reason,
   winner,
@@ -42,7 +43,7 @@ export function ResultOverlay({
   winner: Color | null
   youColor: Color | null
   moves: number
-  /** hold the card back so the winning line can draw first */
+  /** hold the verdict back so the winning line can draw first */
   delayed: boolean
   again: { label: string; run: () => void } | null
   onBack: () => void
@@ -53,46 +54,62 @@ export function ResultOverlay({
   const copy = COPY[outcome]
 
   return (
-    <div className={`overlay result ${outcome}${delayed ? ' delayed' : ''}`} role="dialog" aria-modal="true" aria-labelledby="result-title">
-      <div className="result-card">
-        {outcome === 'win' && (
-          <div className="burst" aria-hidden>
-            {PARTICLES.map((p, i) => (
-              <i
-                key={i}
-                className={p.gold ? 'gold' : 'seal'}
-                style={{ '--a': `${p.a}deg`, '--d': `${p.d}px`, '--delay': `${p.delay}ms` } as CSSProperties}
-              />
-            ))}
-          </div>
-        )}
-        <div className="seal-stamp" aria-hidden>
-          <span>{copy.seal}</span>
+    <div
+      className={`overlay result ${outcome}${delayed ? ' delayed' : ''}`}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="result-title"
+    >
+      <div className="slab">
+        <div className="slab-word en" aria-hidden>
+          {copy.word}
         </div>
-        <h2 id="result-title" className="result-title">
-          {copy.title}
-        </h2>
-        <p className="result-reason">{REASON_LABEL[reason]}</p>
-        <div className="result-stats">
-          <span>
-            <b>{moves}</b> 手
+        <div className="slab-head">
+          <span className="slab-seal" aria-hidden>
+            {copy.seal}
           </span>
-          <span className="pp-sep" />
-          <span>执{youColor === 'white' ? '白' : '黑'}</span>
+          <div>
+            <p className="kicker">RESULT // {REASON_CODE[reason]}</p>
+            <h2 id="result-title" className="slab-title">
+              {copy.title}
+            </h2>
+          </div>
         </div>
-        <div className="result-actions">
+        <dl className="slab-spec">
+          <div>
+            <dt>结果</dt>
+            <dd>{REASON_LABEL[reason]}</dd>
+          </div>
+          <div>
+            <dt>手数</dt>
+            <dd className="mono">{String(moves).padStart(3, '0')}</dd>
+          </div>
+          <div>
+            <dt>执子</dt>
+            <dd>{youColor === 'white' ? '白' : '黑'}</dd>
+          </div>
+        </dl>
+        <div className="slab-actions">
           {again && (
-            <button type="button" className="btn primary lg" onClick={again.run}>
-              <Icon name="replay" />
-              {again.label}
+            <button type="button" className="btn lg block primary" onClick={again.run}>
+              <span>
+                <Icon name="replay" size={16} />
+                {again.label}
+              </span>
+              <small className="en" aria-hidden>
+                Again
+              </small>
             </button>
           )}
-          <button type="button" className={`btn lg ${again ? 'ghost' : 'primary'}`} onClick={onBack} autoFocus={!again}>
-            返回大厅
+          <button type="button" className={`btn lg block${again ? '' : ' primary'}`} onClick={onBack} autoFocus={!again}>
+            <span>返回大厅</span>
+            <small className="en" aria-hidden>
+              Lobby
+            </small>
           </button>
         </div>
         <button type="button" className="link-btn" onClick={onReview}>
-          <Icon name="eye" size={16} />
+          <Icon name="eye" size={15} />
           查看终局棋盘
         </button>
       </div>

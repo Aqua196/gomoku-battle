@@ -5,196 +5,160 @@
   display: grid;
   place-items: center;
   padding: 16px;
-  background: color-mix(in srgb, var(--bg) 52%, transparent);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  animation: fade-in 0.35s both;
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+  animation: fade-in 0.3s both;
 }
 
-/* Wide screens: the verdict takes the sidebar's place and the board stays
-   in view, so the glowing five remains the centerpiece. */
-@media (min-width: 961px) {
+/* Wide screens: the verdict docks over the sidebar; the board stays in view. */
+@media (min-width: 1041px) {
   .overlay.result {
-    place-items: center end;
-    padding-right: max(24px, calc((100vw - 1320px) / 2 + 20px));
-    background: linear-gradient(90deg, transparent 30%, color-mix(in srgb, var(--bg) 70%, transparent) 75%);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    place-items: start end;
+    padding: 24px max(24px, calc((100vw - var(--rail) - 1360px) / 2 + 48px)) 24px 24px;
+    background: none;
+    pointer-events: none;
+  }
+  .overlay.result .slab {
+    pointer-events: auto;
   }
 }
 
 /* A five lets the winning line draw before the verdict lands. */
-.overlay.delayed {
-  animation-delay: 1.2s;
+.overlay.delayed,
+.overlay.delayed .slab {
+  animation-delay: 1.1s;
 }
 
-.overlay.delayed .result-card {
-  animation-delay: 1.2s;
-}
-
-.overlay.delayed .seal-stamp {
-  animation-delay: 1.5s;
-}
-
-.overlay.delayed .burst i {
-  animation-delay: calc(var(--delay) + 1.55s);
-}
-
-.result-card {
+.slab {
+  --slab-bg: var(--surface-2);
+  --slab-fg: var(--ink);
+  --slab-dim: var(--ink-3);
   position: relative;
-  width: min(400px, 100%);
-  padding: 40px 32px 22px;
-  border-radius: 24px;
-  border: 1px solid var(--line-strong);
-  background: var(--panel-solid);
-  box-shadow: var(--shadow-lg);
-  text-align: center;
-  animation: card-in 0.6s var(--ease-spring) both;
+  width: min(380px, 100%);
+  padding: 0 24px 22px;
+  overflow: hidden;
+  border: 1px solid var(--ink);
+  background: var(--slab-bg);
+  box-shadow: 10px 10px 0 var(--ink);
+  color: var(--slab-fg);
+  animation: wipe 0.6s var(--ease) both;
 }
 
-@keyframes card-in {
-  from {
-    opacity: 0;
-    transform: translateY(24px) scale(0.94);
-  }
+.result.win .slab {
+  --slab-bg: #fffa00;
+  --slab-fg: #191919;
+  --slab-dim: rgba(25, 25, 25, 0.6);
+  border-color: #191919;
 }
 
-.result.win .result-card {
-  background:
-    radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, var(--gold) 20%, transparent), transparent 60%),
-    var(--panel-solid);
+.result.lose .slab {
+  --slab-bg: #191919;
+  --slab-fg: #ececea;
+  --slab-dim: #7e7e7e;
+  border-color: #191919;
+  box-shadow: 10px 10px 0 var(--ink-4);
 }
 
-/* Seal stamp: filled vermilion for a win, grey ink for a loss. */
-.seal-stamp {
+.slab-word {
+  margin: 0 -24px 18px -6px;
+  overflow: hidden;
+  font-size: 104px;
+  font-weight: 700;
+  line-height: 0.82;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.result.lose .slab-word,
+.result.draw .slab-word,
+.result.abandoned .slab-word {
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--slab-fg);
+}
+
+.slab-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.slab-seal {
   display: grid;
   place-items: center;
-  width: 88px;
-  height: 88px;
-  margin: 0 auto 20px;
-  border-radius: 14px;
-  background: linear-gradient(160deg, var(--seal-2), var(--seal));
-  box-shadow:
-    inset 0 0 0 3px rgba(255, 255, 255, 0.85),
-    inset 0 0 0 5px var(--seal),
-    0 14px 30px -10px var(--glow-seal);
-  color: #fff;
-  font: 900 50px/1 var(--font-serif);
-  transform: rotate(-8deg);
-  animation: stamp 0.55s 0.3s var(--ease-spring) both;
+  flex: none;
+  width: 64px;
+  height: 64px;
+  background: var(--slab-fg);
+  color: var(--slab-bg);
+  font-size: 40px;
+  font-weight: 900;
 }
 
-.result.lose .seal-stamp {
-  background: transparent;
-  box-shadow:
-    inset 0 0 0 3px var(--text-3),
-    inset 0 0 0 6px var(--panel-solid),
-    inset 0 0 0 7px var(--text-3);
-  color: var(--text-3);
+.slab .kicker {
+  margin-bottom: 6px;
+  color: var(--slab-dim);
+  font-size: 10px;
 }
 
-.result.draw .seal-stamp,
-.result.abandoned .seal-stamp {
-  background: transparent;
-  box-shadow:
-    inset 0 0 0 3px var(--gold),
-    inset 0 0 0 6px var(--panel-solid),
-    inset 0 0 0 7px var(--gold);
-  color: var(--gold);
+.slab-title {
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: 0.06em;
 }
 
-@keyframes stamp {
-  0% {
-    opacity: 0;
-    transform: rotate(-8deg) scale(2.3);
-  }
-  60% {
-    opacity: 1;
-    transform: rotate(-8deg) scale(0.92);
-  }
-  100% {
-    transform: rotate(-8deg) scale(1);
-  }
+.slab-spec {
+  gap: 0;
+  margin-bottom: 20px;
+  border-top: 1px solid var(--slab-fg);
 }
 
-.result-title {
-  margin: 0 0 4px;
-  font: 800 32px/1.2 var(--font-serif);
-  letter-spacing: 0.08em;
+.slab-spec > div {
+  grid-template-columns: 64px minmax(0, 1fr);
+  border-bottom: 1px solid color-mix(in srgb, var(--slab-fg) 22%, transparent);
 }
 
-.result.win .result-title {
-  background: linear-gradient(100deg, var(--seal-2), var(--gold));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+.slab-spec dt {
+  padding: 7px 0;
+  background: none;
+  color: var(--slab-dim);
 }
 
-.result-reason {
-  margin: 0 0 16px;
-  color: var(--text-2);
+.slab-spec dd {
+  padding: 7px 0;
+  background: none;
+  color: var(--slab-fg);
+  font-weight: 700;
 }
 
-.result-stats {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 22px;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: var(--panel-hi);
-  color: var(--text-2);
-  font-size: 13px;
-}
-
-.result-stats b {
-  color: var(--text);
-  font-family: var(--font-mono);
-}
-
-.result-actions {
+.slab-actions {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 14px;
 }
 
-.burst {
-  position: absolute;
-  top: 84px;
-  left: 50%;
-  width: 0;
-  height: 0;
-  pointer-events: none;
+.slab .btn {
+  border-color: var(--slab-fg);
+  background: transparent;
+  color: var(--slab-fg);
 }
 
-.burst i {
-  position: absolute;
-  top: -4px;
-  left: -4px;
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  opacity: 0;
-  animation: burst 1.2s var(--delay) cubic-bezier(0.15, 0.7, 0.3, 1) forwards;
+.slab .btn.primary {
+  background: var(--slab-fg);
+  color: var(--slab-bg);
 }
 
-.burst i.gold {
-  background: var(--gold);
+.result.win .slab .btn::before {
+  background: #fff;
 }
 
-.burst i.seal {
-  border-radius: 50%;
-  background: var(--seal-2);
+.result.win .slab .btn:hover,
+.result.win .slab .btn:focus-visible {
+  color: #191919;
 }
 
-@keyframes burst {
-  0% {
-    opacity: 1;
-    transform: rotate(var(--a)) translateX(0) scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: rotate(var(--a)) translateX(var(--d)) rotate(200deg) scale(0.4);
-  }
+.result.lose .slab .btn:hover,
+.result.lose .slab .btn:focus-visible {
+  color: #191919;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { colLabel, pointLabel, rowLabel } from '../lib/notation'
 import type { Point } from '../lib/winLine'
@@ -50,7 +50,6 @@ function isCoarsePointer(): boolean {
  */
 export function Board({ cells, lastMove, winLine, order, coords = true, interaction, className }: BoardProps) {
   const n = cells.length
-  const gradientId = useId()
   const gridRef = useRef<HTMLDivElement>(null)
   const [focus, setFocus] = useState<Point>({ x: Math.floor(n / 2), y: Math.floor(n / 2) })
   const [armed, setArmed] = useState<string | null>(null)
@@ -118,7 +117,10 @@ export function Board({ cells, lastMove, winLine, order, coords = true, interact
             </g>
           ))}
           <rect className="board-frame" x={0.5} y={0.5} width={n - 1} height={n - 1} />
-          {n === 15 && STAR_POINTS.map(([x, y]) => <circle key={`${x},${y}`} cx={x + 0.5} cy={y + 0.5} r={0.1} />)}
+          {n === 15 &&
+            STAR_POINTS.map(([x, y]) => (
+              <rect key={`${x},${y}`} className="board-star" x={x + 0.38} y={y + 0.38} width={0.24} height={0.24} />
+            ))}
         </svg>
 
         <div
@@ -154,7 +156,7 @@ export function Board({ cells, lastMove, winLine, order, coords = true, interact
                 return (
                   <div key={key} className="cell">
                     {stone}
-                    {isLast && <span className="ripple" />}
+                    {isLast && <span className="reticle" />}
                   </div>
                 )
               }
@@ -171,7 +173,7 @@ export function Board({ cells, lastMove, winLine, order, coords = true, interact
                   onClick={() => play(x, y)}
                 >
                   {stone}
-                  {isLast && <span className="ripple" />}
+                  {isLast && <span className="reticle" />}
                   {playable && interaction.color && <span className={`stone ghost ${interaction.color}`} />}
                 </button>
               )
@@ -181,21 +183,17 @@ export function Board({ cells, lastMove, winLine, order, coords = true, interact
 
         {first && last && (
           <svg className="board-winline" viewBox={`0 0 ${n} ${n}`} aria-hidden>
-            <defs>
-              <linearGradient id={gradientId} x1={first.x} y1={first.y} x2={last.x} y2={last.y} gradientUnits="userSpaceOnUse">
-                <stop offset="0" stopColor="#ffd98a" />
-                <stop offset=".5" stopColor="#ff8a5c" />
-                <stop offset="1" stopColor="#ffd98a" />
-              </linearGradient>
-            </defs>
-            <line
-              x1={first.x + 0.5}
-              y1={first.y + 0.5}
-              x2={last.x + 0.5}
-              y2={last.y + 0.5}
-              stroke={`url(#${gradientId})`}
-              pathLength={1}
-            />
+            {['under', 'over'].map((layer) => (
+              <line
+                key={layer}
+                className={`winline-${layer}`}
+                x1={first.x + 0.5}
+                y1={first.y + 0.5}
+                x2={last.x + 0.5}
+                y2={last.y + 0.5}
+                pathLength={1}
+              />
+            ))}
           </svg>
         )}
       </div>
