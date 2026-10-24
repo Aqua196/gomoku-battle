@@ -43,8 +43,8 @@ export function HeroBoard() {
   const [step, setStep] = useState(() => (prefersReducedMotion() ? MOVES.length : 0))
   const figRef = useRef<HTMLElement>(null)
 
-  // Parallax: the board and the yellow block drift against each other with
-  // the pointer. Written straight to CSS variables — no re-render per move.
+  // Parallax: the board drifts gently with the pointer, against the landscape
+  // behind it. Written straight to CSS variables — no re-render per move.
   const onPointerMove = (e: PointerEvent<HTMLElement>) => {
     const el = figRef.current
     if (!el || e.pointerType !== 'mouse') return
