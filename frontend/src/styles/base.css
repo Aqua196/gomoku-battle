@@ -15,26 +15,39 @@ body {
   min-height: 100dvh;
   background: var(--bg);
   color: var(--ink);
-  font: 14px/1.6 var(--font-cn);
+  font: 14px/1.7 var(--font-cn);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  transition:
+    background-color 0.5s,
+    color 0.5s;
 }
 
-/* Drafting grid, fading out down the page. */
+/* Rice-paper fibre: long thin streaks plus fine grain. */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  opacity: 0.55;
+  mix-blend-mode: multiply;
   background-image:
-    linear-gradient(var(--line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line) 1px, transparent 1px);
-  background-size: 96px 96px;
-  opacity: 0.45;
-  mask-image: linear-gradient(to bottom, #000, transparent 75%);
-  -webkit-mask-image: linear-gradient(to bottom, #000, transparent 75%);
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='0.012 0.38' numOctaves='3' seed='4'/><feColorMatrix values='0 0 0 0 0.45  0 0 0 0 0.40  0 0 0 0 0.32  0 0 0 0.5 -0.18'/></filter><rect width='100%' height='100%' filter='url(%23f)'/></svg>"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.3  0 0 0 0 0.27  0 0 0 0 0.2  0 0 0 0.35 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+}
+
+:root[data-theme='dark'] body::before {
+  mix-blend-mode: screen;
+  opacity: 0.12;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) body::before {
+    mix-blend-mode: screen;
+    opacity: 0.12;
+  }
 }
 
 #root {
@@ -54,96 +67,65 @@ h3,
 p,
 dl,
 dd,
-figure {
+figure,
+ul {
   margin: 0;
 }
 
 ::selection {
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--seal);
+  color: var(--on-seal);
 }
 
-/* ── Type helpers ────────────────────────────────────────────────── */
+/* ── Type ────────────────────────────────────────────────────────── */
 
-.en {
-  font-family: var(--font-en);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.serif {
+  font-family: var(--font-serif);
+}
+
+.latin {
+  font-family: var(--font-latin);
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  font-variant-numeric: lining-nums;
 }
 
 .mono {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
 }
 
 .kicker {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: baseline;
+  gap: 12px;
   color: var(--ink-3);
-  font: 500 11px/1 var(--font-mono);
-  letter-spacing: 0.12em;
+  font: 500 10.5px/1 var(--font-mono);
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
-.rec {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--ink);
-  font-weight: 600;
+.kicker .latin {
+  font-size: 15px;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
-.rec i {
-  width: 7px;
-  height: 7px;
-  background: var(--alert);
-  animation: blink 1.2s steps(1) infinite;
+/* ── Motion ──────────────────────────────────────────────────────── */
+
+.reveal {
+  /* backwards, not both: the clip must not outlive the entrance. */
+  animation: reveal 1s var(--ease-out) backwards;
+  animation-delay: var(--d, 0s);
 }
 
-/* Corner brackets drawn around a box (four L-marks, one pseudo-element). */
-.bracketed {
-  position: relative;
-}
-
-.bracketed::after {
-  --c: var(--ink);
-  --l: 14px;
-  --w: 2px;
-  content: '';
-  position: absolute;
-  inset: -8px;
-  pointer-events: none;
-  background:
-    linear-gradient(var(--c), var(--c)) top left / var(--l) var(--w),
-    linear-gradient(var(--c), var(--c)) top left / var(--w) var(--l),
-    linear-gradient(var(--c), var(--c)) top right / var(--l) var(--w),
-    linear-gradient(var(--c), var(--c)) top right / var(--w) var(--l),
-    linear-gradient(var(--c), var(--c)) bottom left / var(--l) var(--w),
-    linear-gradient(var(--c), var(--c)) bottom left / var(--w) var(--l),
-    linear-gradient(var(--c), var(--c)) bottom right / var(--l) var(--w),
-    linear-gradient(var(--c), var(--c)) bottom right / var(--w) var(--l);
-  background-repeat: no-repeat;
-}
-
-.stripes {
-  background: repeating-linear-gradient(-45deg, var(--accent) 0 8px, var(--ink) 8px 16px);
-}
-
-/* ── Motion: wipes, not bounces ──────────────────────────────────── */
-
-.wipe {
-  animation: wipe 0.7s var(--ease) both;
-}
-
-@keyframes wipe {
+@keyframes reveal {
   from {
-    clip-path: polygon(0 0, 0 0, 0 100%, 0 100%);
-  }
-  to {
-    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+    opacity: 0;
+    transform: translateY(14px);
+    filter: blur(6px);
   }
 }
 
@@ -153,53 +135,9 @@ figure {
   }
 }
 
-@keyframes slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-}
-
 @keyframes blink {
   50% {
-    opacity: 0;
-  }
-}
-
-@keyframes stripes-run {
-  to {
-    background-position: 45px 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-delay: 0s !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-  }
-}
-
-/* ── Choreography: staggered reveal, rolling digits, marquee ─────── */
-
-.reveal {
-  /* backwards, not both: the clip must not outlive the entrance (it would
-     crop shadows and corner brackets that sit outside the box). */
-  animation: reveal 0.8s var(--ease-out) backwards;
-  animation-delay: var(--d, 0s);
-}
-
-@keyframes reveal {
-  from {
-    opacity: 0;
-    transform: translateY(18px);
-    clip-path: inset(0 0 100% 0);
-  }
-  to {
-    clip-path: inset(0 0 0 0);
+    opacity: 0.25;
   }
 }
 
@@ -211,32 +149,50 @@ figure {
 
 .roll-in {
   display: inline-block;
-  animation: roll-in 0.38s var(--ease-out) both;
+  animation: roll-in 0.45s var(--ease-out) both;
 }
 
 @keyframes roll-in {
   from {
     opacity: 0;
-    transform: translateY(90%);
+    transform: translateY(80%);
+    filter: blur(2px);
   }
 }
 
-.marquee {
-  overflow: hidden;
-  white-space: nowrap;
+/* Ensō: a brush circle that keeps drawing itself (searching / waiting). */
+.enso path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: enso 2.6s var(--ease) infinite;
 }
 
-.marquee-track {
-  display: inline-flex;
-  animation: marquee var(--marquee-speed, 40s) linear infinite;
+@keyframes enso {
+  0% {
+    stroke-dashoffset: 1;
+    opacity: 1;
+  }
+  55% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  85%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
 }
 
-.marquee-track > * {
-  flex: none;
-}
-
-@keyframes marquee {
-  to {
-    transform: translateX(-50%);
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
 }

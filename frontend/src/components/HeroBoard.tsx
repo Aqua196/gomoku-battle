@@ -4,6 +4,7 @@ import { boardFromMoves, findWinLine } from '../lib/winLine'
 import type { Point } from '../lib/winLine'
 import { Board } from './Board'
 import { Roll } from './Motion'
+import { Seal } from './Seal'
 
 /*
  * A short scripted game for the landing figure: white builds a four on row 6
@@ -37,13 +38,13 @@ function prefersReducedMotion(): boolean {
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
-/** Self-playing demo board, framed like a figure in a field manual. */
+/** Self-playing demo board, captioned like a plate in an album. */
 export function HeroBoard() {
   const [step, setStep] = useState(() => (prefersReducedMotion() ? MOVES.length : 0))
   const figRef = useRef<HTMLElement>(null)
 
-  // Parallax: the board and the yellow block drift against each other with
-  // the pointer. Written straight to CSS variables — no re-render per move.
+  // Parallax: the board drifts gently with the pointer, against the landscape
+  // behind it. Written straight to CSS variables — no re-render per move.
   const onPointerMove = (e: PointerEvent<HTMLElement>) => {
     const el = figRef.current
     if (!el || e.pointerType !== 'mouse') return
@@ -71,24 +72,23 @@ export function HeroBoard() {
 
   return (
     <figure className="hero-fig" ref={figRef} onPointerMove={onPointerMove} onPointerLeave={onPointerLeave}>
-      <div className="hero-block" />
-      <figcaption className="fig-head">
-        <span className="mono">FIG.01 — DEMO MATCH</span>
-        <span className="mono">
-          MOVE{' '}
-          <b>
-            <Roll value={pad(step)} />
-          </b>{' '}
-          / {MOVES.length}
-        </span>
-      </figcaption>
-      <div className="hero-board bracketed">
+      <div className="hero-board">
         <Board cells={cells} lastMove={lastMove} winLine={winLine} coords={false} className={finished ? 'finished' : undefined} />
       </div>
-      <div className="fig-foot">
-        <span className="mono">{finished ? '[ BLACK WINS ] 黑棋五连' : '[ PLAYING ] 对弈中'}</span>
-        <span className="mono">15×15 // FREESTYLE</span>
-      </div>
+      <figcaption className="fig-cap">
+        <span className="fig-title serif">图一{'\u3000'}对局演示</span>
+        <span className="fig-move">
+          <span className="latin">move</span>
+          <b className="latin">
+            <Roll value={pad(step)} />
+          </b>
+          <span className="latin">/ {MOVES.length}</span>
+        </span>
+        <span className={`fig-result serif${finished ? ' on' : ''}`}>
+          <Seal text="五连" size={30} seed={5} />
+          黑棋胜
+        </span>
+      </figcaption>
     </figure>
   )
 }

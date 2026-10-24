@@ -1,86 +1,89 @@
 /*
- * Design tokens — industrial terminal: flat surfaces, square corners, one
- * signal yellow. Light is the default "field manual" look; dark follows the
- * night variant. No gradients, glows or rounded cards anywhere.
+ * 墨 · 弈 — rice paper, ink in five tones, one vermilion. Dark mode turns the
+ * surroundings to night; the board itself stays a sheet of lit paper.
  */
 
 :root {
   color-scheme: light;
-  --bg: #eeeeea;
-  --surface: #f7f7f4;
-  --surface-2: #ffffff;
-  --ink: #191919;
-  --ink-2: #4d4d4d;
-  --ink-3: #7e7e7e;
-  --ink-4: #b8b8b8;
-  --line: #d3d3cd;
-  --accent: #fffa00;
-  --on-accent: #191919;
-  --cyan: #0f9fd8;
-  --alert: #f0382b;
-  --ok: #17a464;
+  --bg: #efe9dc;
+  --bg-2: #e8e1d2;
+  --surface: #f6f1e6;
+  --ink: #1b1a17;
+  --ink-2: #4b473f;
+  --ink-3: #847e72;
+  --ink-4: #b8b09f;
+  --line: rgba(27, 26, 23, 0.13);
+  --line-2: rgba(27, 26, 23, 0.3);
+  --seal: #b5392b;
+  --seal-2: #cd4b38;
+  --on-seal: #f7f2e7;
+  --celadon: #557b69;
+  --ok: #4f7f5d;
+  --incense: #6f5a45;
 
-  --board: #f9f8f3;
-  --board-line: #9a9a94;
-  --stone-black: #191919;
-  --stone-white: #ffffff;
-  --black-edge: transparent;
-  --white-edge: #191919;
+  /* The board is paper in both themes. */
+  --board-paper: #f4eddd;
+  --board-ink: #1b1a17;
+  --stone-black: #171613;
+  --stone-white: #fcf9f1;
 
-  --font-cn: 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans CJK SC',
-    'Source Han Sans SC', system-ui, sans-serif;
-  --font-en: 'Barlow Condensed', var(--font-cn);
+  /* Landscape canvas colours, as "r g b" triplets. */
+  --scape-ink: 27 26 23;
+  --scape-mist: 239 233 220;
+  --scape-sun: 181 57 43;
+
+  --font-serif: 'Gomoku Serif', 'Songti SC', 'STSong', 'Noto Serif SC', 'Noto Serif CJK SC', 'Source Han Serif SC',
+    serif;
+  --font-cn: 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans CJK SC', system-ui,
+    sans-serif;
+  --font-latin: 'Cormorant Garamond', 'Iowan Old Style', Georgia, serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   --ease: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --rail: 76px;
+  --rail: 72px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --bg: #0f1012;
-    --surface: #15161a;
-    --surface-2: #1b1c20;
-    --ink: #ececea;
-    --ink-2: #b8b8b8;
-    --ink-3: #7e7e7e;
-    --ink-4: #4d4d4d;
-    --line: #2a2b30;
-    --on-accent: #111111;
-    --cyan: #2cc3f5;
-    --alert: #ff4d3d;
-    --ok: #2fd08a;
-
-    --board: #17181b;
-    --board-line: #46474c;
-    --stone-black: #050505;
-    --stone-white: #ececea;
-    --black-edge: rgba(236, 236, 234, 0.55);
-    --white-edge: transparent;
+    --bg: #12120f;
+    --bg-2: #191915;
+    --surface: #1d1c18;
+    --ink: #ece6d8;
+    --ink-2: #bdb6a6;
+    --ink-3: #8a8476;
+    --ink-4: #57534a;
+    --line: rgba(236, 230, 216, 0.12);
+    --line-2: rgba(236, 230, 216, 0.28);
+    --seal: #c8473a;
+    --seal-2: #dc5a47;
+    --celadon: #80a894;
+    --incense: #a48a6c;
+    --board-paper: #ebe3d0;
+    --scape-ink: 236 230 216;
+    --scape-mist: 18 18 15;
+    --scape-sun: 200 71 58;
   }
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #0f1012;
-  --surface: #15161a;
-  --surface-2: #1b1c20;
-  --ink: #ececea;
-  --ink-2: #b8b8b8;
-  --ink-3: #7e7e7e;
-  --ink-4: #4d4d4d;
-  --line: #2a2b30;
-  --on-accent: #111111;
-  --cyan: #2cc3f5;
-  --alert: #ff4d3d;
-  --ok: #2fd08a;
-
-  --board: #17181b;
-  --board-line: #46474c;
-  --stone-black: #050505;
-  --stone-white: #ececea;
-  --black-edge: rgba(236, 236, 234, 0.55);
-  --white-edge: transparent;
+  --bg: #12120f;
+  --bg-2: #191915;
+  --surface: #1d1c18;
+  --ink: #ece6d8;
+  --ink-2: #bdb6a6;
+  --ink-3: #8a8476;
+  --ink-4: #57534a;
+  --line: rgba(236, 230, 216, 0.12);
+  --line-2: rgba(236, 230, 216, 0.28);
+  --seal: #c8473a;
+  --seal-2: #dc5a47;
+  --celadon: #80a894;
+  --incense: #a48a6c;
+  --board-paper: #ebe3d0;
+  --scape-ink: 236 230 216;
+  --scape-mist: 18 18 15;
+  --scape-sun: 200 71 58;
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Board } from '../components/Board'
 import { Icon } from '../components/Icon'
+import { InkScape } from '../components/InkScape'
 import { Roll } from '../components/Motion'
 import { PlayerPanel } from '../components/PlayerPanel'
 import { ResultOverlay } from '../components/ResultOverlay'
@@ -156,19 +157,18 @@ function GameView({ game }: { game: GameState }) {
     )
   }
 
-  const pad3 = (n: number) => String(n).padStart(3, '0')
   const turnState = over || !playing ? 'over' : myTurn ? 'mine' : aiThinking ? 'ai' : 'wait'
-  const TURN_EN = { over: 'Match End', mine: 'Your Turn', ai: 'AI Computing', wait: 'Opponent' }
+  const TURN_LATIN = { over: 'the game is decided', mine: 'your move', ai: 'the machine is reading', wait: 'their move' }
 
   return (
     <div className={`app-shell${myTurn ? ' my-turn' : ''}${over && !reviewing ? ' show-result' : ''}`}>
       <Rail showStats={false} />
       <main className="stage game">
+        <InkScape className="game-scape" seed={31} sun={null} lift={0.1} />
         <section className="board-stage">
           <div className="stage-banners" aria-live="polite">
             {!oppOnline && playing && (
               <div className="stage-banner alert">
-                <span className="stripes" aria-hidden />
                 <span>
                   对手断线{oppLeft !== null && <>，{Math.ceil(oppLeft / 1000)}s 内未重连判负</>}
                 </span>
@@ -181,7 +181,7 @@ function GameView({ game }: { game: GameState }) {
             )}
             {showReconnected && oppOnline && <div className="stage-banner ok">对手已重连</div>}
           </div>
-          <div className="board-wrap bracketed">
+          <div className="board-wrap">
             <Board
               cells={game.board}
               lastMove={game.lastMove}
@@ -195,31 +195,29 @@ function GameView({ game }: { game: GameState }) {
               className={over ? 'scan finished' : 'scan'}
             />
           </div>
-          <div className="board-meta mono" aria-hidden>
-            <span>#{game.roomId.slice(-6).toUpperCase()}</span>
-            <span>15×15 // FREESTYLE</span>
-            <span>
-              MOVE{' '}
-              <b>
-                <Roll value={pad3(game.moveNumber)} />
-              </b>{' '}
-              / 225
+          <div className="board-meta" aria-hidden>
+            <span className="mono">No.{game.roomId.slice(-6).toUpperCase()}</span>
+            <span className="serif">纵横十五道 · 自由规则</span>
+            <span className="latin">
+              move <b>{game.moveNumber}</b> of 225
             </span>
           </div>
         </section>
 
         <aside className="game-side">
           <header className="side-head reveal">
-            <span className="sec-no mono">02</span>
-            <div className="sec-title">
-              <h1>对局</h1>
-              <p className="en">Match</p>
+            <div>
+              <p className="kicker">
+                <span>No.03</span>
+                <span className="latin">the game</span>
+              </p>
+              <h1 className="serif">对局</h1>
             </div>
             <div className="side-meta">
               {aiBadge && <em className="tag ai">{aiBadge}</em>}
-              <span className="side-moves">
+              <span className="side-moves serif">
                 第{' '}
-                <b className="mono">
+                <b className="latin">
                   <Roll value={game.moveNumber} />
                 </b>{' '}
                 手
@@ -239,8 +237,12 @@ function GameView({ game }: { game: GameState }) {
             ) : (
               <span className="turn-text">对手思考中</span>
             )}
-            <span className="turn-en en">{TURN_EN[turnState]}</span>
-            {turnState === 'mine' && <i className="turn-caret" aria-hidden />}
+            <span className="turn-latin latin">{TURN_LATIN[turnState]}</span>
+            {turnState === 'mine' && (
+              <svg className="turn-brush" viewBox="0 0 120 10" preserveAspectRatio="none" aria-hidden>
+                <path d="M2,6 C30,2 60,8 90,4 S116,5 118,5" pathLength={1} />
+              </svg>
+            )}
             {turnState === 'ai' && (
               <span className="thinking-dots" aria-hidden>
                 <i />
@@ -280,7 +282,7 @@ function GameView({ game }: { game: GameState }) {
               </button>
             )}
           </div>
-          <p className="side-hint mono">KEYS // 方向键移动 · 回车落子 · 触屏点两下确认</p>
+          <p className="side-hint serif">方向键移动 · 回车落子 · 触屏点两下确认</p>
         </aside>
       </main>
 
@@ -298,9 +300,7 @@ function GameView({ game }: { game: GameState }) {
       )}
       {over && reviewing && (
         <div className="review-bar">
-          <span className="review-label mono">
-            REVIEW // 终局 · 共 {game.moveNumber} 手
-          </span>
+          <span className="review-label serif">终局复盘 · 共 {game.moveNumber} 手</span>
           <button type="button" className="btn sm" onClick={() => setReviewing(false)}>
             <span>结算</span>
           </button>

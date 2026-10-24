@@ -4,161 +4,190 @@
   z-index: 50;
   display: grid;
   place-items: center;
-  padding: 16px;
-  background: color-mix(in srgb, var(--bg) 60%, transparent);
-  animation: fade-in 0.3s both;
+  padding: 24px 16px;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  backdrop-filter: blur(2px);
+  animation: fade-in 0.4s both;
 }
 
-/* Wide screens: the verdict docks over the sidebar; the board stays in view. */
+/* Wide screens: the scroll hangs where the sidebar was; the board stays in view. */
 @media (min-width: 1041px) {
   .overlay.result {
-    place-items: start end;
-    padding: 24px max(24px, calc((100vw - var(--rail) - 1360px) / 2 + 48px)) 24px 24px;
-    background: none;
+    place-items: center end;
+    padding-right: max(32px, calc((100vw - var(--rail) - 1400px) / 2 + 48px));
+    background: linear-gradient(90deg, transparent 45%, color-mix(in srgb, var(--bg) 75%, transparent) 80%);
+    backdrop-filter: none;
     pointer-events: none;
   }
-  .overlay.result .slab {
+  .overlay.result .scroll {
     pointer-events: auto;
   }
 }
 
-/* A five lets the winning line draw before the verdict lands. */
+/* A five lets the winning stroke draw before the scroll unrolls. */
 .overlay.delayed,
-.overlay.delayed .slab {
-  animation-delay: 1.1s;
+.overlay.delayed .scroll-paper,
+.overlay.delayed .rod {
+  animation-delay: 1.5s;
 }
 
-.slab {
-  --slab-bg: var(--surface-2);
-  --slab-fg: var(--ink);
-  --slab-dim: var(--ink-3);
+.scroll {
   position: relative;
-  width: min(380px, 100%);
-  padding: 0 24px 22px;
-  overflow: hidden;
-  border: 1px solid var(--ink);
-  background: var(--slab-bg);
-  box-shadow: 10px 10px 0 var(--ink);
-  color: var(--slab-fg);
-  animation: wipe 0.6s var(--ease) both;
+  width: min(340px, 100%);
+  padding: 12px 0;
 }
 
-.result.win .slab {
-  --slab-bg: #fffa00;
-  --slab-fg: #191919;
-  --slab-dim: rgba(25, 25, 25, 0.6);
-  border-color: #191919;
+/* Wooden rods: they start together at the centre and part as it unrolls. */
+.rod {
+  position: absolute;
+  left: -16px;
+  right: -16px;
+  z-index: 2;
+  height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(#6b5039, #3a2a1c 60%, #2a1e14);
+  box-shadow: 0 3px 6px rgba(20, 10, 0, 0.35);
 }
 
-.result.lose .slab {
-  --slab-bg: #191919;
-  --slab-fg: #ececea;
-  --slab-dim: #7e7e7e;
-  border-color: #191919;
-  box-shadow: 10px 10px 0 var(--ink-4);
+.rod::before,
+.rod::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  width: 10px;
+  height: 18px;
+  border-radius: 3px;
+  background: #241a11;
 }
 
-.slab-word {
-  margin: 0 -24px 18px -6px;
-  overflow: hidden;
-  font-size: 104px;
-  font-weight: 700;
-  line-height: 0.82;
-  letter-spacing: 0;
-  white-space: nowrap;
+.rod::before {
+  left: -6px;
 }
 
-.result.lose .slab-word,
-.result.draw .slab-word,
-.result.abandoned .slab-word {
-  color: transparent;
-  -webkit-text-stroke: 1.5px var(--slab-fg);
+.rod::after {
+  right: -6px;
 }
 
-.slab-head {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+.rod.top {
+  top: calc(50% - 7px);
+  animation: rod-top 1s var(--ease) forwards;
+}
+
+.rod.bottom {
+  bottom: calc(50% - 7px);
+  animation: rod-bottom 1s var(--ease) forwards;
+}
+
+@keyframes rod-top {
+  to {
+    top: 0;
+  }
+}
+
+@keyframes rod-bottom {
+  to {
+    bottom: 0;
+  }
+}
+
+/* Paper keeps light-theme ink in both themes. */
+.scroll-paper {
+  --ink: #1b1a17;
+  --ink-2: #4b473f;
+  --ink-3: #847e72;
+  --line: rgba(27, 26, 23, 0.13);
+  --line-2: rgba(27, 26, 23, 0.3);
+  --bg: #f4eddd;
+  position: relative;
+  padding: 40px 30px 26px;
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='0.02 0.6' numOctaves='3' seed='9'/><feColorMatrix values='0 0 0 0 0.5  0 0 0 0 0.43  0 0 0 0 0.3  0 0 0 0.38 -0.16'/></filter><rect width='100%' height='100%' filter='url(%23f)'/></svg>"),
+    #f4eddd;
+  box-shadow: 0 30px 60px -30px rgba(30, 18, 4, 0.55);
+  color: var(--ink);
+  clip-path: inset(50% 0 50% 0);
+  animation: unroll 1s var(--ease) forwards;
+}
+
+@keyframes unroll {
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.scroll-glyph {
+  margin-bottom: 4px;
+  font-size: 148px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  text-shadow: 0 0 1px rgba(27, 26, 23, 0.4);
+}
+
+.result.lose .scroll-glyph,
+.result.abandoned .scroll-glyph {
+  color: rgba(27, 26, 23, 0.42);
+}
+
+.scroll-seal {
+  position: absolute;
+  top: 40px;
+  right: 26px;
+  transform: rotate(-7deg);
+  animation: stamp 0.5s 0.9s var(--ease-out) backwards;
+}
+
+.overlay.delayed .scroll-seal {
+  animation-delay: 2.4s;
+}
+
+@keyframes stamp {
+  from {
+    opacity: 0;
+    transform: rotate(-7deg) scale(1.8);
+  }
+}
+
+.scroll-title {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 0.24em;
+  text-align: center;
+}
+
+.scroll-latin {
   margin-bottom: 18px;
-}
-
-.slab-seal {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 64px;
-  height: 64px;
-  background: var(--slab-fg);
-  color: var(--slab-bg);
-  font-size: 40px;
-  font-weight: 900;
-}
-
-.slab .kicker {
-  margin-bottom: 6px;
-  color: var(--slab-dim);
-  font-size: 10px;
-}
-
-.slab-title {
-  font-size: 30px;
-  font-weight: 900;
-  line-height: 1.1;
-  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  font-size: 16px;
+  text-align: center;
 }
 
 .slab-spec {
-  gap: 0;
-  margin-bottom: 20px;
-  border-top: 1px solid var(--slab-fg);
+  margin-bottom: 22px;
+  border-top: 1px solid var(--line-2);
 }
 
 .slab-spec > div {
-  grid-template-columns: 64px minmax(0, 1fr);
-  border-bottom: 1px solid color-mix(in srgb, var(--slab-fg) 22%, transparent);
-}
-
-.slab-spec dt {
-  padding: 7px 0;
-  background: none;
-  color: var(--slab-dim);
+  grid-template-columns: 72px minmax(0, 1fr);
 }
 
 .slab-spec dd {
-  padding: 7px 0;
-  background: none;
-  color: var(--slab-fg);
-  font-weight: 700;
+  font-weight: 600;
 }
 
-.slab-actions {
+.slab-spec dd.latin {
+  font-size: 18px;
+}
+
+.scroll-actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   margin-bottom: 14px;
 }
 
-.slab .btn {
-  border-color: var(--slab-fg);
-  background: transparent;
-  color: var(--slab-fg);
-}
-
-.slab .btn.primary {
-  background: var(--slab-fg);
-  color: var(--slab-bg);
-}
-
-.result.win .slab .btn::before {
-  background: #fff;
-}
-
-.result.win .slab .btn:hover,
-.result.win .slab .btn:focus-visible {
-  color: #191919;
-}
-
-.result.lose .slab .btn:hover,
-.result.lose .slab .btn:focus-visible {
-  color: #191919;
+.scroll-paper .link-btn {
+  display: flex;
+  width: max-content;
+  margin: 0 auto;
 }
