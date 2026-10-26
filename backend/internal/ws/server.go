@@ -1,14 +1,17 @@
 package ws
 
 import (
+	"context"
 	"errors"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
 	"os"
-	"path/filepath"
+	"path"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -24,6 +27,12 @@ type Server struct {
 	hub      *hub.Hub
 	cfg      protocol.Config
 	upgrader websocket.Upgrader
+
+	mu       sync.Mutex
+	perIP    map[string]int     // live websockets per client address
+	live     map[*conn]struct{} // every open websocket, for Shutdown
+	draining bool               // Shutdown began: refuse new upgrades
+	pumps    sync.WaitGroup     // one per running read pump
 }
 
 // session is per-connection state owned by the read pump goroutine.
@@ -31,6 +40,9 @@ type session struct {
 	srv    *Server
 	c      *conn
 	player *hub.Player // set once hello succeeds
+
+	limit       *bucket   // inbound frame budget (PROTOCOL §6)
+	lastLimited time.Time // throttles rate_limited errors to one per second
 }
 
 // NewServer builds the gateway. allowAnyOrigin passes every Origin header
@@ -38,8 +50,10 @@ type session struct {
 // the request host, while permitting absent Origin (non-browser clients).
 func NewServer(h *hub.Hub, cfg protocol.Config, allowAnyOrigin bool) *Server {
 	return &Server{
-		hub: h,
-		cfg: cfg,
+		hub:   h,
+		cfg:   cfg,
+		perIP: make(map[string]int),
+		live:  make(map[*conn]struct{}),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  4096,
 			WriteBufferSize: 4096,
@@ -88,37 +102,103 @@ func (s *Server) Handler(staticDir string, enablePprof bool) http.Handler {
 // spaHandler serves staticDir with a fallback to index.html so the SPA owns
 // client-side routes (D8).
 func spaHandler(dir string) http.Handler {
-	fs := http.FileServer(http.Dir(dir))
+	// os.DirFS only accepts fs.ValidPath names, so ".." can never escape dir.
+	root := os.DirFS(dir)
+	files := http.FileServerFS(root)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		clean := filepath.Clean("/" + r.URL.Path) // force inside dir
-		p := filepath.Join(dir, clean)
-		if info, err := os.Stat(p); err == nil && !info.IsDir() {
-			fs.ServeHTTP(w, r)
+		clean := path.Clean("/" + r.URL.Path)
+		if info, err := fs.Stat(root, strings.TrimPrefix(clean, "/")); err == nil && !info.IsDir() {
+			files.ServeHTTP(w, r)
 			return
 		}
 		// Missing file: index.html only for navigation requests (extension-
 		// less route or Accept: text/html); /assets/* and other real files
 		// get an honest 404 instead of HTML masquerading as the asset.
-		nav := filepath.Ext(clean) == "" || strings.Contains(r.Header.Get("Accept"), "text/html")
+		nav := path.Ext(clean) == "" || strings.Contains(r.Header.Get("Accept"), "text/html")
 		if !nav || strings.HasPrefix(clean, "/assets/") {
 			http.NotFound(w, r)
 			return
 		}
-		http.ServeFile(w, r, filepath.Join(dir, "index.html"))
+		http.ServeFileFS(w, r, root, "index.html")
 	})
 }
 
-// handleWS upgrades and runs the read pump on the handler goroutine.
+// handleWS upgrades and runs the read pump on the handler goroutine. The
+// per-IP cap is checked before the upgrade so a flood is refused with a
+// plain 429 instead of costing a websocket and two goroutines each.
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
+	ip := clientIP(r, s.cfg.TrustProxy)
+	if !s.acquireIP(ip) {
+		http.Error(w, "too many connections", http.StatusTooManyRequests)
+		return
+	}
+	defer s.releaseIP(ip)
+	if !s.beginPump() {
+		http.Error(w, "server shutting down", http.StatusServiceUnavailable)
+		return
+	}
+	defer s.pumps.Done()
+
 	wsConn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return // upgrade already wrote the error
 	}
 	c := newConn(wsConn, s.cfg)
-	sess := &session{srv: s, c: c}
+	s.track(c, true)
+	defer s.track(c, false)
+	sess := &session{srv: s, c: c, limit: newBucket(s.cfg.MsgRate, s.cfg.MsgBurst)}
 	s.hub.ConnOpened()
 	go c.writePump()
 	sess.readPump()
+}
+
+// beginPump registers a read pump unless Shutdown has started.
+func (s *Server) beginPump() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.draining {
+		return false
+	}
+	s.pumps.Add(1)
+	return true
+}
+
+func (s *Server) track(c *conn, open bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if open {
+		s.live[c] = struct{}{}
+	} else {
+		delete(s.live, c)
+	}
+}
+
+// Shutdown sends every open websocket a 1001 "going away" close so clients
+// reconnect (with their token) to whichever instance is up next, then waits
+// for the read pumps to finish their disconnect bookkeeping or ctx to end.
+// http.Server.Shutdown does not cover these: hijacked connections are ours.
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.mu.Lock()
+	s.draining = true
+	conns := make([]*conn, 0, len(s.live))
+	for c := range s.live {
+		conns = append(conns, c)
+	}
+	s.mu.Unlock()
+	for _, c := range conns {
+		c.GoAway()
+	}
+	done := make(chan struct{})
+	go func() {
+		s.pumps.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // send marshals and enqueues one frame to this connection.
@@ -159,12 +239,27 @@ func (sess *session) readPump() {
 			}
 			return
 		}
+		if !sess.limit.allow(time.Now()) {
+			sess.rateLimited()
+			continue
+		}
 		if sess.player == nil {
 			sess.handleHello(data)
 			continue
 		}
 		sess.dispatch(data)
 	}
+}
+
+// rateLimited drops the frame; the sender hears about it at most once per
+// second so a flood cannot turn into a flood of error frames back.
+func (sess *session) rateLimited() {
+	now := time.Now()
+	if now.Sub(sess.lastLimited) < time.Second {
+		return
+	}
+	sess.lastLimited = now
+	sess.sendErr(protocol.ERateLimited, "too many messages, slow down")
 }
 
 // handleHello validates and binds the hello frame. On success it swaps the

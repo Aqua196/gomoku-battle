@@ -14,7 +14,7 @@ import { setPref } from '../lib/prefs'
 import { sfx } from '../lib/sound'
 import { findWinLine } from '../lib/winLine'
 import { aiBadgeLabel, aiDifficulty, aiOpponent, isAiThinking } from '../state/ai'
-import { useStore } from '../state/store'
+import { useStore } from '../state/useStore'
 import { MOVE_TIMEOUT_MS, RECONNECT_WINDOW_MS } from '../ws/protocol'
 import type { Board as Cells, Color, GameState } from '../ws/protocol'
 

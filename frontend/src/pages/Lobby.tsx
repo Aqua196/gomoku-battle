@@ -7,7 +7,7 @@ import { Rail } from '../components/Rail'
 import { useNow } from '../hooks/useNow'
 import { pointSeed } from '../lib/ink'
 import { DIFFICULTIES } from '../state/ai'
-import { useStore } from '../state/store'
+import { useStore } from '../state/useStore'
 import type { Difficulty, Room, RoomPlayer } from '../ws/protocol'
 import { Gate } from './Gate'
 

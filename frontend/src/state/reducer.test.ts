@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { deriveYouColor, initialState, reducer } from './store'
+import { deriveYouColor, initialState, reducer } from './reducer'
 import {
   RESUME_GRACE_MS,
   createResumeWatchdog,
   smoothClockOffset,
 } from './clock'
-import type { AppState } from './store'
+import type { AppState } from './reducer'
 import type { GameState, Room, ServerMessage } from '../ws/protocol'
 
 function game(over: Partial<GameState> = {}): GameState {

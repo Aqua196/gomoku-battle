@@ -433,7 +433,7 @@ func (e *Engine) lineScore(b *game.Board, x, y, dx, dy int, c game.Color) int {
 				total += 3200
 			} else if mine == 4 &&
 				((line[i] == game.Empty && i+5 < n && line[i+5] == game.Empty) ||
-					(line[i+4] == game.Empty && i > 0 && line[i-1] == game.Empty)) {
+					(line[i+4] == game.Empty && i > 0 && line[i-1] == game.Empty)) { //nolint:gosec // i > 0 guards line[i-1]
 				total += 32000
 			}
 		}

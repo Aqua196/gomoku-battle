@@ -43,6 +43,7 @@ export type ErrorCode =
   | 'game_over'
   | 'invalid_difficulty'
   | 'not_implemented'
+  | 'rate_limited'
   | 'internal'
 
 /* ── Client → Server ─────────────────────────────────────────────── */

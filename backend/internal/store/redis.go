@@ -12,6 +12,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -51,10 +52,10 @@ func (s *RedisStore) op() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), opTimeout)
 }
 
-func (s *RedisStore) playerKey(id string) string     { return "p:" + id }
-func (s *RedisStore) playerTokenKey(t string) string { return "pt:" + t }
+func (s *RedisStore) playerKey(id string) string       { return "p:" + id }
+func (s *RedisStore) playerTokenKey(t string) string   { return "pt:" + t }
 func (s *RedisStore) playerTokIdxKey(id string) string { return "pti:" + id }
-func (s *RedisStore) roomKey(id string) string       { return "r:" + id }
+func (s *RedisStore) roomKey(id string) string         { return "r:" + id }
 
 func (s *RedisStore) put(rec *PlayerRecord) {
 	data, err := json.Marshal(rec)
@@ -92,12 +93,12 @@ func (s *RedisStore) getPlayer(id string) (*PlayerRecord, bool) {
 	get := pipe.Get(ctx, s.playerKey(id))
 	pipe.Expire(ctx, s.playerKey(id), playerTTL)
 	pipe.Expire(ctx, s.playerTokIdxKey(id), playerTTL)
-	if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
+	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
 		slog.Warn("store: redis get player", "err", err)
 	}
 	data, err := get.Bytes()
 	if err != nil {
-		if err != redis.Nil {
+		if !errors.Is(err, redis.Nil) {
 			slog.Warn("store: redis get player", "err", err)
 		}
 		return nil, false
@@ -116,7 +117,7 @@ func (s *RedisStore) PlayerByToken(token string) (*PlayerRecord, bool) {
 	pipe := s.rdb.TxPipeline()
 	get := pipe.Get(ctx, s.playerTokenKey(token))
 	pipe.Expire(ctx, s.playerTokenKey(token), playerTTL)
-	if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
+	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
 		slog.Warn("store: redis get token", "err", err)
 	}
 	id, err := get.Result()
@@ -183,7 +184,7 @@ func (s *RedisStore) RoomByID(id string) (RoomRecord, bool) {
 	defer cancel()
 	data, err := s.rdb.Get(ctx, s.roomKey(id)).Bytes()
 	if err != nil {
-		if err != redis.Nil {
+		if !errors.Is(err, redis.Nil) {
 			slog.Warn("store: redis get room", "err", err)
 		}
 		return RoomRecord{}, false
@@ -226,7 +227,7 @@ func (s *RedisStore) ListRooms() []RoomRecord {
 	for _, id := range ids {
 		cmds[id] = pipe.Get(ctx, s.roomKey(id))
 	}
-	if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
+	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
 		slog.Warn("store: redis list rooms", "err", err)
 	}
 	out := make([]RoomRecord, 0, len(ids))
@@ -234,7 +235,7 @@ func (s *RedisStore) ListRooms() []RoomRecord {
 	for _, id := range ids {
 		data, err := cmds[id].Bytes()
 		if err != nil {
-			if err == redis.Nil {
+			if errors.Is(err, redis.Nil) {
 				dead = append(dead, id)
 			}
 			continue

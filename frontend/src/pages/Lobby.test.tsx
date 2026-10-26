@@ -2,7 +2,8 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppState, StoreApi } from '../state/store'
+import type { AppState } from '../state/reducer'
+import type { StoreApi } from '../state/useStore'
 import type { Room } from '../ws/protocol'
 
 const storeMock = vi.hoisted(() => {
@@ -17,7 +18,7 @@ const storeMock = vi.hoisted(() => {
   }
 })
 
-vi.mock('../state/store', () => ({
+vi.mock('../state/useStore', () => ({
   useStore: () => storeMock.get(),
 }))
 

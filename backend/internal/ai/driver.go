@@ -112,7 +112,12 @@ func boardFrom(gs *protocol.GameState) game.Board {
 	var b game.Board
 	for y, row := range gs.Board {
 		for x, v := range row {
-			b[y][x] = game.Color(v)
+			switch v {
+			case protocol.CellBlack:
+				b[y][x] = game.Black
+			case protocol.CellWhite:
+				b[y][x] = game.White
+			}
 		}
 	}
 	return b

@@ -3,7 +3,8 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppState, StoreApi } from '../state/store'
+import type { AppState } from '../state/reducer'
+import type { StoreApi } from '../state/useStore'
 import type { GameState } from '../ws/protocol'
 
 const storeMock = vi.hoisted(() => {
@@ -18,7 +19,7 @@ const storeMock = vi.hoisted(() => {
   }
 })
 
-vi.mock('../state/store', () => ({
+vi.mock('../state/useStore', () => ({
   useStore: () => storeMock.get(),
 }))
 

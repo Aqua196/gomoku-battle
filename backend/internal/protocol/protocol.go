@@ -68,6 +68,7 @@ const (
 	EInvalidDifficulty = "invalid_difficulty"
 	EInvalidNick       = "invalid_nick"
 	ENotImplemented    = "not_implemented"
+	ERateLimited       = "rate_limited"
 	EInternal          = "internal"
 )
 
@@ -120,6 +121,18 @@ type Config struct {
 	// the list dirty and one flush interval emits a single render+push.
 	// Zero means every mutation broadcasts immediately (tests).
 	RoomListFlush time.Duration
+
+	// MsgRate and MsgBurst bound inbound frames per connection (token
+	// bucket: MsgRate refills per second up to MsgBurst). Frames over the
+	// limit are dropped with error{code:"rate_limited"}. Zero disables.
+	MsgRate  float64
+	MsgBurst int
+	// MaxConnsPerIP caps concurrent websockets from one client address;
+	// the upgrade beyond it answers 429. Zero disables.
+	MaxConnsPerIP int
+	// TrustProxy takes the client address from the first X-Forwarded-For
+	// hop instead of the socket peer (only behind a trusted reverse proxy).
+	TrustProxy bool
 }
 
 // DefaultConfig returns the production constants from PROTOCOL §6.
@@ -137,6 +150,9 @@ func DefaultConfig() Config {
 		AbandonTTL:      10 * time.Minute,
 		AIThink:         0,
 		RoomListFlush:   50 * time.Millisecond,
+		MsgRate:         20,
+		MsgBurst:        40,
+		MaxConnsPerIP:   32,
 	}
 }
 

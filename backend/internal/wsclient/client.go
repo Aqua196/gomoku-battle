@@ -53,7 +53,10 @@ func DialOpts(rawurl string, header http.Header, suppressPong bool) (*Client, er
 	if err != nil {
 		return nil, err
 	}
-	conn, _, err := websocket.DefaultDialer.Dial(parsed.String(), header)
+	conn, resp, err := websocket.DefaultDialer.Dial(parsed.String(), header)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -64,9 +67,8 @@ func DialOpts(rawurl string, header http.Header, suppressPong bool) (*Client, er
 		// runner under -race never leaves a 1s write deadline on net.Conn.
 		conn.SetPingHandler(func(message string) error {
 			err := conn.WriteControl(websocket.PongMessage, []byte(message), time.Now().Add(defaultWriteWait))
-			if err == websocket.ErrCloseSent {
-				return nil
-			} else if e, ok := err.(net.Error); ok && e.Temporary() {
+			var ne net.Error
+			if errors.Is(err, websocket.ErrCloseSent) || (errors.As(err, &ne) && ne.Timeout()) {
 				return nil
 			}
 			return err

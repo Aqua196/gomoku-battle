@@ -4,7 +4,7 @@ import { InkScape } from '../components/InkScape'
 import { Rail } from '../components/Rail'
 import { Seal } from '../components/Seal'
 import { useMedia } from '../hooks/useMedia'
-import { useStore } from '../state/store'
+import { useStore } from '../state/useStore'
 
 const POINTS: [string, string][] = [
   ['毫秒同步', '服务端权威判定'],

@@ -1,0 +1,27 @@
+version: "2"
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - errorlint
+    - gosec
+    - misspell
+    - nilerr
+    - unconvert
+  settings:
+    gosec:
+      excludes:
+        - G404 # math/rand drives AI move jitter, not security
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      # Tests and the load-test/dev tools may ignore close errors and use
+      # plain http clients.
+      - path: (_test\.go|cmd/loadtest/|cmd/wsclient/)
+        linters: [errcheck, gosec, bodyclose]
+
+formatters:
+  enable:
+    - gofmt

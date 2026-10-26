@@ -1,5 +1,5 @@
 import { useMetrics } from '../hooks/useMetrics'
-import { useStore } from '../state/store'
+import { useStore } from '../state/useStore'
 import { ConnBadge } from './ConnBadge'
 import { Roll } from './Motion'
 import { Seal } from './Seal'

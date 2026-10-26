@@ -179,7 +179,7 @@ func (a *Actor) run() {
 			reconC = nil
 		}
 		if a.bothOffline() {
-			d := a.bothOfflineAt.Add(a.cfg.AbandonTTL).Sub(time.Now())
+			d := time.Until(a.bothOfflineAt.Add(a.cfg.AbandonTTL))
 			if abandonT == nil {
 				abandonT = time.NewTimer(d)
 			} else {

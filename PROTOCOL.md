@@ -157,6 +157,10 @@
 | MOVE_TIMEOUT | 30s | 单回合限时 |
 | RECONNECT_WINDOW | 30s | 断线判负窗口 |
 | SEND_BUF | 64 msgs | 每连接下行缓冲，满则按断线处理 |
+| MSG_RATE / MSG_BURST | 20/s，突发 40 | 每连接上行令牌桶；超出的帧丢弃并回 `error{code:"rate_limited"}`（每秒至多一条） |
+| MAX_CONNS_PER_IP | 32 | 单客户端地址并发 WS 上限，超出时升级请求回 HTTP 429；`MAX_CONNS_PER_IP=0` 关闭（压测用），`TRUST_PROXY=1` 时按 `X-Forwarded-For` 首跳计 |
+
+- 服务端收到 SIGTERM/SIGINT 时优雅退出：停止接受新连接，向所有 WS 发送关闭码 **1001 (going away)**，客户端应按断线重连流程带 token 重连。
 
 ## 7. HTTP 端点（同一端口）
 
@@ -168,7 +172,7 @@
 
 ## 8. 错误码一览（`{"type":"error","code":"...","message":"人类可读"}`）
 
-`bad_request` `hello_timeout` `unauthorized` `not_in_lobby` `already_in_room` `not_in_room` `room_not_found` `room_full` `not_your_turn` `illegal_move` `game_over` `invalid_difficulty` `not_implemented` `internal`
+`bad_request` `hello_timeout` `unauthorized` `not_in_lobby` `already_in_room` `not_in_room` `room_not_found` `room_full` `not_your_turn` `illegal_move` `game_over` `invalid_difficulty` `not_implemented` `rate_limited` `internal`
 
 ## 9. 前端行为约定
 

@@ -26,6 +26,21 @@ jobs:
         # RedisStore contract tests use miniredis (in-process), no service needed
         run: go test -race -count=1 ./...
 
+  backend-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache-dependency-path: backend/go.sum
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.15.0
+          working-directory: backend
+
   frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -45,6 +60,9 @@ jobs:
       - name: lint
         working-directory: frontend
         run: npm run lint
+      - name: test
+        working-directory: frontend
+        run: npm test
       - name: build
         working-directory: frontend
         run: npm run build

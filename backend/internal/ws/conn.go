@@ -5,6 +5,7 @@ package ws
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Aqua196/gomoku-battle/backend/internal/protocol"
@@ -26,6 +27,9 @@ type conn struct {
 	quit chan struct{} // closed by Close; writePump flushes then exits
 	cfg  protocol.Config
 	once sync.Once
+	// goingAway picks close code 1001 over 1000: the server is shutting
+	// down and the client should reconnect rather than treat it as final.
+	goingAway atomic.Bool
 
 	// room_list coalescing (PROTOCOL §2 merge requirement): at most one
 	// marker occupies the send buffer; it always resolves to rlPending,
@@ -103,6 +107,12 @@ func (c *conn) Close() {
 	c.once.Do(func() { close(c.quit) })
 }
 
+// GoAway closes with 1001 "going away" (server shutdown).
+func (c *conn) GoAway() {
+	c.goingAway.Store(true)
+	c.Close()
+}
+
 // takeRoomList swaps out the pending snapshot for a queued marker.
 func (c *conn) takeRoomList() []byte {
 	c.rlMu.Lock()
@@ -159,9 +169,12 @@ func (c *conn) writePump() {
 				}
 				break
 			}
+			code := websocket.CloseNormalClosure
+			if c.goingAway.Load() {
+				code = websocket.CloseGoingAway
+			}
 			_ = c.ws.SetWriteDeadline(time.Now().Add(c.cfg.WriteWait))
-			_ = c.ws.WriteMessage(websocket.CloseMessage,
-				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			_ = c.ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(code, ""))
 			return
 		}
 	}

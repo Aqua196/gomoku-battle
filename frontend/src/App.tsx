@@ -2,7 +2,8 @@ import { useEffect } from 'react'
 import { BrowserRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Game } from './pages/Game'
 import { Lobby } from './pages/Lobby'
-import { StoreProvider, useStore } from './state/store'
+import { StoreProvider } from './state/store'
+import { useStore } from './state/useStore'
 
 const ERROR_LABEL: Record<string, string> = {
   not_implemented: '该功能暂未实现',
@@ -18,6 +19,7 @@ const ERROR_LABEL: Record<string, string> = {
   unauthorized: '身份验证失败，正在重新连接',
   invalid_difficulty: '无效难度',
   bad_request: '请求格式错误',
+  rate_limited: '操作太频繁，请稍后再试',
   internal: '服务器内部错误',
   offline: '连接已断开，正在重连，请稍候再试',
 }
