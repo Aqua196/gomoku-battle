@@ -67,6 +67,9 @@ func TestResumedInLobbyHasNoGameState(t *testing.T) {
 	if w2["serverNow"].(float64) <= 0 {
 		t.Fatalf("welcome missing serverNow: %v", w2)
 	}
+	if rid, present := w2["roomId"]; !present || rid != nil {
+		t.Fatalf("lobby resume must carry roomId:null, got %v", w2)
+	}
 	// No game_state may follow for a lobby session.
 	if _, err := b.WaitType("game_state", 300*time.Millisecond); err == nil {
 		t.Fatal("game_state sent for lobby resume")

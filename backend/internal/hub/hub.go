@@ -1,19 +1,29 @@
-// Package hub is the mutex-protected registry at the center of the server:
-// players, rooms, the FIFO matchmaking queue and the lobby broadcast
-// (DESIGN §2/§3). It never sends network traffic or performs Store I/O while
-// holding its lock — every outbound write is a non-blocking TrySend into a
-// connection's buffered channel, every Store persistence call runs outside
-// h.mu, and every game-actor post happens after the lock is released, so
-// there is no lock ordering with actor or network code.
+// Package hub runs one node of the game server (DESIGN §2/§3/§10).
+//
+// A node plays two roles. As the connection side (session.go) it owns the
+// sessions of the players whose sockets it holds: hello/resume, lobby
+// requests, and forwarding their game commands. As the owner side
+// (owner.go) it runs the rooms it owns: one game.Actor each, the seats,
+// the spectators, and the game's snapshot and lease. A player and their
+// room may live on different nodes; cluster.Directory says where things
+// are and cluster.Bus carries frames and commands between nodes. With one
+// node and the in-memory directory and bus (New), everything is local and
+// behaves like the original single-process hub.
+//
+// Locking: h.mu guards the node's maps and session/room fields. It is never
+// held across Directory or Bus calls, network writes, or actor posts, so
+// there is no lock ordering with any of them.
 package hub
 
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/Aqua196/gomoku-battle/backend/internal/cluster"
 	"github.com/Aqua196/gomoku-battle/backend/internal/game"
 	"github.com/Aqua196/gomoku-battle/backend/internal/protocol"
 	"github.com/Aqua196/gomoku-battle/backend/internal/store"
@@ -43,21 +53,22 @@ const (
 	StatePlaying                    // in a live game
 )
 
-// Player is the runtime identity bound to a store.PlayerRecord session.
+// Player is a session on this node, bound to a store.PlayerRecord.
 type Player struct {
-	rec    *store.PlayerRecord
-	conn   Conn
-	state  PlayerState
+	rec   *store.PlayerRecord
+	conn  Conn
+	epoch int64 // this socket's generation (cluster.Directory.SetLocation)
+	state PlayerState
+	// roomID is the room the player sits in and owner the node running it.
 	roomID string
+	owner  string
 	queued bool
+	// watching is the room this lobby player spectates, on node watchOwner.
+	watching   string
+	watchOwner string
 	// disconnectedAt marks when the conn was lost (zero while connected);
 	// drives the session TTL sweep for non-playing sessions (REVIEW R4).
 	disconnectedAt time.Time
-	// isAI marks the pseudo-player seated in an isAI room: it never holds
-	// a conn, never enters h.players, and renders as connected.
-	isAI bool
-	// watching is the room this lobby player spectates ("" for none).
-	watching string
 }
 
 // ID returns the player id.
@@ -69,41 +80,41 @@ func (p *Player) Nick() string { return p.rec.Nick }
 // Token returns the resume token.
 func (p *Player) Token() string { return p.rec.Token }
 
-// roomEntry adds runtime seats and the game actor to a store.RoomRecord.
-// seats[0] is black, seats[1] is white.
-type roomEntry struct {
-	meta     store.RoomRecord
-	seats    [2]*Player
-	actor    *game.Actor
-	watchers map[*Player]struct{}
-}
-
-// Metrics is the /metrics JSON payload (PROTOCOL §7).
+// Metrics is the /metrics JSON payload (PROTOCOL §7). Rooms and
+// ActiveGames are cluster-wide; the rest count this node.
 type Metrics struct {
+	Node         string  `json:"node"`
 	Connections  int     `json:"connections"`
 	LobbyPlayers int     `json:"lobbyPlayers"`
 	Rooms        int     `json:"rooms"`
 	ActiveGames  int     `json:"activeGames"`
+	OwnedGames   int     `json:"ownedGames"`
 	GamesPlayed  int     `json:"gamesPlayed"`
 	TotalMoves   int     `json:"totalMoves"`
 	MovesPerSec  float64 `json:"movesPerSec"` // accepted moves, trailing 60s
 	AiGames      int     `json:"aiGames"`
 }
 
-// Hub owns the player/room/queue registries.
+// Options places a hub in a cluster.
+type Options struct {
+	Node string // unique per process
+	Dir  cluster.Directory
+	Bus  cluster.Bus
+}
+
+// Hub is one node.
 type Hub struct {
 	cfg   protocol.Config
 	store store.Store
+	node  string
+	dir   cluster.Directory
+	bus   cluster.Bus
 
-	// storeMu serializes room Store persistence outside h.mu (lock order:
-	// storeMu -> mu, never mu -> storeMu) so concurrent UpsertRoom and
-	// DeleteRoom calls never reorder while keeping network I/O out of h.mu.
-	storeMu        sync.Mutex
 	mu             sync.Mutex
-	players        map[string]*Player // by player id; disconnected players stay resumable
-	playersByToken map[string]*Player // by resume token; authoritative runtime index
+	players        map[string]*Player // sessions on this node, by player id
+	playersByToken map[string]*Player // same sessions, by resume token
 	rooms          map[string]*roomEntry
-	queue          []*Player // FIFO
+	rlDirty        bool // pending lobby room_list push (coalesced flush)
 
 	connCount   atomic.Int64
 	gamesPlayed atomic.Int64
@@ -112,76 +123,142 @@ type Hub struct {
 	mtx         sync.Mutex
 	moveTimes   []int64 // unixnano of accepted moves, pruned to 60s
 
-	sweepStop chan struct{}
-	rlDirty   bool // pending lobby room_list broadcast (coalesced flush)
+	// locs caches where remote players' sockets live, so delivering a
+	// frame from a game actor does not wait on a Directory read. A stale
+	// entry costs one hop: the wrong node forwards the frame (deliver).
+	locMu sync.Mutex
+	locs  map[string]cachedLoc
+
+	snaps    *snapshotWriter
+	stop     chan struct{}
+	stopOnce sync.Once
+	loops    sync.WaitGroup
 }
 
-// New builds a hub around a Store and an injected timing config and starts
-// the session sweeper (R4: disconnected non-playing sessions expire).
+// New builds a single in-memory node: the original one-process server.
 func New(st store.Store, cfg protocol.Config) *Hub {
+	node := randID("n", 6)
+	return NewNode(st, cfg, Options{
+		Node: node,
+		Dir:  cluster.NewMemDirectory(),
+		Bus:  cluster.NewMemNetwork().Join(node),
+	})
+}
+
+// NewNode builds a node of a cluster and starts its background loops.
+func NewNode(st store.Store, cfg protocol.Config, o Options) *Hub {
 	h := &Hub{
 		cfg:            cfg,
 		store:          st,
+		node:           o.Node,
+		dir:            o.Dir,
+		bus:            o.Bus,
 		players:        make(map[string]*Player),
 		playersByToken: make(map[string]*Player),
 		rooms:          make(map[string]*roomEntry),
-		sweepStop:      make(chan struct{}),
+		locs:           make(map[string]cachedLoc),
+		stop:           make(chan struct{}),
 	}
-	if cfg.SweepInterval > 0 {
-		go h.sweepLoop()
+	h.snaps = newSnapshotWriter(h.dir, cfg.LeaseTTL > 0)
+	h.bus.Start(h.onEnvelope)
+	h.every(cfg.SweepInterval, h.sweep)
+	h.every(cfg.RoomListFlush, h.flushRoomList)
+	if cfg.LeaseTTL > 0 {
+		h.loops.Add(1)
+		go func() {
+			defer h.loops.Done()
+			h.snaps.run(h.stop)
+		}()
+		h.maintain() // heartbeat and adopt orphaned games right away (restart)
+		h.every(cfg.RecoverInterval, h.maintain)
 	}
-	if cfg.RoomListFlush > 0 {
-		go h.roomListFlushLoop()
-	}
+	slog.Info("hub node up", "node", h.node, "leases", cfg.LeaseTTL > 0)
 	return h
 }
 
-// Stop halts the background sweeper.
-func (h *Hub) Stop() { close(h.sweepStop) }
+// Node is this node's id.
+func (h *Hub) Node() string { return h.node }
 
-// syncRoomStore persists the latest authoritative state of roomID to h.store
-// outside h.mu. Serializing under storeMu before briefly inspecting h.rooms
-// guarantees that a rapid CreateRoom -> DeleteRoom sequence never leaves a
-// stale room in the Store.
-func (h *Hub) syncRoomStore(roomID string) {
-	if roomID == "" {
+// every runs fn every d until Stop; d <= 0 disables it.
+func (h *Hub) every(d time.Duration, fn func()) {
+	if d <= 0 {
 		return
 	}
-	h.storeMu.Lock()
-	defer h.storeMu.Unlock()
+	h.loops.Add(1)
+	go func() {
+		defer h.loops.Done()
+		t := time.NewTicker(d)
+		defer t.Stop()
+		for {
+			select {
+			case <-h.stop:
+				return
+			case <-t.C:
+				fn()
+			}
+		}
+	}()
+}
 
+// Stop halts the background loops. Idempotent.
+func (h *Hub) Stop() {
+	h.stopOnce.Do(func() {
+		close(h.stop)
+		h.loops.Wait()
+	})
+}
+
+// Handoff prepares a graceful exit (DESIGN §10): halt every game this node
+// owns without a verdict, write their final snapshots and release their
+// leases, so another node — or this server restarted — restores them
+// within one recovery interval instead of waiting out the lease. Call it
+// before closing the sockets.
+func (h *Hub) Handoff() {
 	h.mu.Lock()
-	var meta store.RoomRecord
-	exists := false
-	if e := h.rooms[roomID]; e != nil {
-		meta = e.meta
-		exists = true
+	actors := make([]*game.Actor, 0, len(h.rooms))
+	ids := make([]string, 0, len(h.rooms))
+	for id, e := range h.rooms {
+		actors = append(actors, e.actor)
+		ids = append(ids, id)
 	}
 	h.mu.Unlock()
-
-	if exists {
-		h.store.UpsertRoom(meta)
-	} else {
-		h.store.DeleteRoom(roomID)
+	for _, a := range actors {
+		a.Halt()
+		<-a.Done()
 	}
+	h.snaps.flush()
+	for _, id := range ids {
+		h.dir.ReleaseLease(id, h.node)
+	}
+	slog.Info("hub handed off its games", "node", h.node, "games", len(actors))
 }
 
-// sweepLoop expires disconnected non-playing sessions on SessionTTL. Playing
+// Kill simulates a crash, for tests and failover drills: games stop with
+// no verdict and no cleanup, the loops stop, the node leaves the bus.
+// Leases expire and other nodes adopt the games, as if the process died.
+func (h *Hub) Kill() {
+	h.mu.Lock()
+	actors := make([]*game.Actor, 0, len(h.rooms))
+	for _, e := range h.rooms {
+		actors = append(actors, e.actor)
+	}
+	h.mu.Unlock()
+	for _, a := range actors {
+		a.Halt()
+		<-a.Done()
+	}
+	h.Close()
+}
+
+// Close stops the node and leaves the bus. Idempotent.
+func (h *Hub) Close() {
+	h.Stop()
+	h.bus.Close()
+}
+
+// sweep expires disconnected non-playing sessions on SessionTTL. Playing
 // sessions are never reaped here: their fate belongs to the game actor (the
 // reconnect window and the double-disconnect abandon rules come first).
-func (h *Hub) sweepLoop() {
-	ticker := time.NewTicker(h.cfg.SweepInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-h.sweepStop:
-			return
-		case <-ticker.C:
-			h.sweep()
-		}
-	}
-}
-
 func (h *Hub) sweep() {
 	now := time.Now()
 	var expired []string
@@ -228,8 +305,7 @@ func (h *Hub) noteMove(_ string) {
 
 // Metrics snapshots the counters for /metrics.
 func (h *Hub) Metrics() Metrics {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	rooms := h.dir.Rooms()
 	cutoff := time.Now().Add(-time.Minute).UnixNano()
 	h.mtx.Lock()
 	keep := h.moveTimes[:0]
@@ -242,115 +318,198 @@ func (h *Hub) Metrics() Metrics {
 	recent := len(keep)
 	h.mtx.Unlock()
 	m := Metrics{
+		Node:        h.node,
 		Connections: int(h.connCount.Load()),
-		Rooms:       len(h.rooms),
+		Rooms:       len(rooms),
 		GamesPlayed: int(h.gamesPlayed.Load()),
 		TotalMoves:  int(h.totalMoves.Load()),
 		MovesPerSec: float64(recent) / 60,
 		AiGames:     int(h.aiGames.Load()),
 	}
+	for _, r := range rooms {
+		if r.Status == protocol.RoomPlaying {
+			m.ActiveGames++
+		}
+	}
+	h.mu.Lock()
 	for _, p := range h.players {
 		if p.conn != nil && p.state != StatePlaying {
 			m.LobbyPlayers++
 		}
 	}
-	for _, e := range h.rooms {
-		if e.meta.Status == protocol.RoomPlaying {
-			m.ActiveGames++
-		}
-	}
+	m.OwnedGames = len(h.rooms)
+	h.mu.Unlock()
 	return m
 }
 
 // --------------------------------------------------------------- outbound
 
-// sendToPlayer implements game.SendFunc: fetch the live conn under the lock,
-// then write outside it. A stale conn simply fails its send.
-func (h *Hub) sendToPlayer(playerID string, data []byte) {
+// localConn returns the socket of a session on this node (nil while it is
+// disconnected) and whether such a session exists.
+func (h *Hub) localConn(pid string) (Conn, bool) {
 	h.mu.Lock()
-	var c Conn
-	if p := h.players[playerID]; p != nil {
-		c = p.conn
+	defer h.mu.Unlock()
+	p := h.players[pid]
+	if p == nil {
+		return nil, false
 	}
-	h.mu.Unlock()
-	if c != nil && !c.Send(data) {
-		c.Close()
+	return p.conn, true
+}
+
+// deliver implements game.SendFunc: write to the player's socket here, or
+// forward the frame to the node holding it. A player with a session here
+// but no socket is offline; the frame is dropped (they resync on resume).
+func (h *Hub) deliver(pid string, data []byte) {
+	if c, here := h.localConn(pid); here {
+		if c != nil && !c.Send(data) {
+			c.Close()
+		}
+		return
+	}
+	if node, ok := h.locate(pid); ok && node != h.node {
+		h.bus.Send(node, cluster.Envelope{Kind: cluster.KindDeliver, Player: pid, Frame: data})
 	}
 }
 
-// reply marshals msg and delivers it to one player.
+type cachedLoc struct {
+	node    string
+	expires time.Time
+}
+
+// locTTL bounds how long a cached location is trusted without a re-read.
+const locTTL = 5 * time.Second
+
+// locate finds the node holding pid's socket: cache first, then the
+// Directory.
+func (h *Hub) locate(pid string) (string, bool) {
+	now := time.Now()
+	h.locMu.Lock()
+	l, ok := h.locs[pid]
+	h.locMu.Unlock()
+	if ok && now.Before(l.expires) {
+		return l.node, true
+	}
+	node, found := h.dir.Location(pid)
+	h.locMu.Lock()
+	if found {
+		h.locs[pid] = cachedLoc{node: node, expires: now.Add(locTTL)}
+	} else {
+		delete(h.locs, pid)
+	}
+	if len(h.locs) > 1<<16 { // bound memory: an occasional full flush is cheap
+		clear(h.locs)
+	}
+	h.locMu.Unlock()
+	return node, found
+}
+
+// reply marshals msg and delivers it to a session.
 func (h *Hub) reply(p *Player, msg any) {
-	h.sendToPlayer(p.ID(), protocol.Marshal(msg))
+	h.deliver(p.ID(), protocol.Marshal(msg))
 }
 
-// replyErr delivers an error frame to one player.
+// replyErr delivers an error frame to a session.
 func (h *Hub) replyErr(p *Player, code, message string) {
 	h.reply(p, protocol.NewError(code, message))
 }
 
-// lobbyConnsLocked snapshots the connections of every lobby-state player —
-// including waiting-room occupants, who are "in the lobby" per PROTOCOL §2.
-// Caller holds h.mu.
-func (h *Hub) lobbyConnsLocked() []Conn {
-	var out []Conn
-	for _, p := range h.players {
-		if p.conn != nil && p.state != StatePlaying {
-			out = append(out, p.conn)
+// toNode runs e on node: inline when that is this node, else over the bus.
+func (h *Hub) toNode(node string, e cluster.Envelope) {
+	if node == "" {
+		return
+	}
+	if node == h.node {
+		e.From = h.node
+		h.onEnvelope(e)
+		return
+	}
+	h.bus.Send(node, e)
+}
+
+// toPlayerNode runs e where pid's socket lives (if anywhere).
+func (h *Hub) toPlayerNode(pid string, e cluster.Envelope) {
+	if _, here := h.localConn(pid); here {
+		h.toNode(h.node, e)
+		return
+	}
+	if node, ok := h.locate(pid); ok {
+		h.toNode(node, e)
+	}
+}
+
+// onEnvelope dispatches an inbound bus message (or a local short-cut).
+func (h *Hub) onEnvelope(e cluster.Envelope) {
+	switch e.Kind {
+	case cluster.KindDeliver:
+		c, here := h.localConn(e.Player)
+		if !here {
+			// The sender's cached location was stale: pass the frame on
+			// once to wherever the player is now.
+			if node, ok := h.dir.Location(e.Player); ok && node != h.node && e.Owner == "" {
+				e.Owner = node
+				h.bus.Send(node, e)
+			}
+			return
 		}
+		if c != nil && !c.Send(e.Frame) {
+			c.Close()
+		}
+	case cluster.KindLobby:
+		h.markRoomListDirty()
+	case cluster.KindSeated, cluster.KindReleased, cluster.KindWatchEnd, cluster.KindKick, cluster.KindResync:
+		h.onSessionNotice(e)
+	default:
+		h.onOwnerCommand(e)
 	}
-	return out
 }
 
-// roomListMsgLocked builds the full room_list payload. Caller holds h.mu.
-func (h *Hub) roomListMsgLocked() *protocol.RoomListMsg {
-	msg := &protocol.RoomListMsg{Type: protocol.TRoomList, Rooms: []protocol.Room{}}
-	for _, e := range h.rooms {
-		msg.Rooms = append(msg.Rooms, protoRoomLocked(e))
-	}
-	return msg
+// ------------------------------------------------------------- room list
+
+// roomsChanged tells every node (this one included) to refresh the lobby.
+func (h *Hub) roomsChanged() {
+	h.bus.Broadcast(cluster.Envelope{Kind: cluster.KindLobby})
+	h.markRoomListDirty()
 }
 
-// broadcastRoomList marks the lobby list dirty; RoomListFlush>0 coalesces
-// bursts of mutations into one render+push per interval, else it pushes
-// immediately (zero: the synchronous path tests rely on).
-func (h *Hub) broadcastRoomList() {
-	h.mu.Lock()
+// markRoomListDirty schedules a lobby push: coalesced by the flush loop
+// when RoomListFlush > 0, else pushed right away (the synchronous path
+// tests rely on).
+func (h *Hub) markRoomListDirty() {
 	if h.cfg.RoomListFlush > 0 {
-		h.rlDirty = true // only the flush path consumes this flag (R10)
+		h.mu.Lock()
+		h.rlDirty = true // only the flush loop consumes this flag (R10)
 		h.mu.Unlock()
 		return
 	}
-	msg := h.roomListMsgLocked()
-	conns := h.lobbyConnsLocked()
-	h.mu.Unlock()
-	h.pushRoomList(msg, conns)
+	h.pushRoomList()
 }
 
-// roomListFlushLoop emits at most one lobby broadcast per RoomListFlush.
-func (h *Hub) roomListFlushLoop() {
-	ticker := time.NewTicker(h.cfg.RoomListFlush)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-h.sweepStop:
-			return
-		case <-ticker.C:
-			h.mu.Lock()
-			if !h.rlDirty {
-				h.mu.Unlock()
-				continue
-			}
-			h.rlDirty = false
-			msg := h.roomListMsgLocked()
-			conns := h.lobbyConnsLocked()
-			h.mu.Unlock()
-			h.pushRoomList(msg, conns)
-		}
+func (h *Hub) flushRoomList() {
+	h.mu.Lock()
+	dirty := h.rlDirty
+	h.rlDirty = false
+	h.mu.Unlock()
+	if dirty {
+		h.pushRoomList()
 	}
 }
 
-func (h *Hub) pushRoomList(msg *protocol.RoomListMsg, conns []Conn) {
-	data := protocol.Marshal(msg)
+// pushRoomList renders the cluster's room list once and pushes it to every
+// lobby session on this node — including waiting-room occupants, who are
+// "in the lobby" per PROTOCOL §2.
+func (h *Hub) pushRoomList() {
+	h.mu.Lock()
+	conns := make([]Conn, 0, len(h.players))
+	for _, p := range h.players {
+		if p.conn != nil && p.state != StatePlaying {
+			conns = append(conns, p.conn)
+		}
+	}
+	h.mu.Unlock()
+	if len(conns) == 0 {
+		return // nobody in this node's lobby: skip the directory read
+	}
+	data := protocol.Marshal(h.roomListMsg())
 	for _, c := range conns {
 		if !c.SendRoomList(data) {
 			c.Close()
@@ -358,90 +517,39 @@ func (h *Hub) pushRoomList(msg *protocol.RoomListMsg, conns []Conn) {
 	}
 }
 
-// protoRoomLocked renders the wire Room for a room entry. Caller holds h.mu.
-func protoRoomLocked(e *roomEntry) protocol.Room {
+// roomListMsg builds the full room_list payload from the directory.
+func (h *Hub) roomListMsg() *protocol.RoomListMsg {
+	msg := &protocol.RoomListMsg{Type: protocol.TRoomList, Rooms: []protocol.Room{}}
+	for _, r := range h.dir.Rooms() {
+		msg.Rooms = append(msg.Rooms, wireRoom(r))
+	}
+	return msg
+}
+
+// wireRoom renders a directory room as the lobby-facing Room.
+func wireRoom(r cluster.RoomInfo) protocol.Room {
 	players := make([]protocol.RoomPlayer, 0, 2)
 	colors := [2]string{protocol.ColorBlack, protocol.ColorWhite}
-	for i, p := range e.seats {
-		if p == nil {
+	for i, s := range r.Seats {
+		if s == nil {
 			continue
 		}
 		players = append(players, protocol.RoomPlayer{
-			PlayerID:  p.ID(),
-			Nick:      p.Nick(),
+			PlayerID:  s.PlayerID,
+			Nick:      s.Nick,
 			Color:     protocol.StrPtr(colors[i]),
-			Connected: p.conn != nil || p.isAI,
+			Connected: s.Connected || s.IsAI,
 		})
 	}
 	return protocol.Room{
-		ID:         e.meta.ID,
-		Name:       e.meta.Name,
-		Status:     e.meta.Status,
+		ID:         r.ID,
+		Name:       r.Name,
+		Status:     r.Status,
 		Players:    players,
-		IsAI:       e.meta.IsAI,
-		CreatedAt:  e.meta.CreatedAt,
-		Spectators: len(e.watchers),
+		IsAI:       r.IsAI,
+		CreatedAt:  r.CreatedAt,
+		Spectators: r.Spectators,
 	}
-}
-
-// dequeueLocked removes p from the FIFO queue if present and reports
-// whether anything was removed. Caller holds h.mu.
-func (h *Hub) dequeueLocked(p *Player) bool {
-	if !p.queued {
-		return false
-	}
-	p.queued = false
-	for i, q := range h.queue {
-		if q == p {
-			h.queue = append(h.queue[:i], h.queue[i+1:]...)
-			break
-		}
-	}
-	return true
-}
-
-// unwatchLocked detaches p from the game it spectates; the returned exit
-// is finished after the lock (actor post + spectate_end). Caller holds h.mu.
-func (h *Hub) unwatchLocked(p *Player) watchExit {
-	if p.watching == "" {
-		return watchExit{}
-	}
-	x := watchExit{roomID: p.watching}
-	if e := h.rooms[p.watching]; e != nil {
-		delete(e.watchers, p)
-		x.actor = e.actor
-	}
-	p.watching = ""
-	return x
-}
-
-// watchExit is a spectator detachment still to be announced.
-type watchExit struct {
-	actor  *game.Actor
-	roomID string
-}
-
-// finish tells the actor and the player, outside h.mu. It reports whether
-// anything was detached (so the caller refreshes the room list counts).
-func (x watchExit) finish(h *Hub, p *Player) bool {
-	if x.roomID == "" {
-		return false
-	}
-	if x.actor != nil {
-		x.actor.Unwatch(p.ID())
-	}
-	h.reply(p, &protocol.SpectateEndMsg{Type: protocol.TSpectateEnd, RoomID: x.roomID})
-	return true
-}
-
-// queuePositionLocked returns p's 1-based queue position (0 if not queued).
-func (h *Hub) queuePositionLocked(p *Player) int {
-	for i, q := range h.queue {
-		if q == p {
-			return i + 1
-		}
-	}
-	return 0
 }
 
 // randSeat flips a fair coin for play_ai{color:"random"}: 0 black, 1 white.

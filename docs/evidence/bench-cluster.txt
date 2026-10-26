@@ -1,0 +1,22 @@
+# Cluster overhead: same machine (4 vCPU, loadtest + servers + redis-server 7.0 together), pvp, 30s per setup.
+# old = commit 8bba9f4 (pre-cluster hub); new = this branch. Two-node run seats every pair's players on different nodes.
+
+$ loadtest -rooms 100 -duration 30s   (not saturated)
+== old-mem
+  move→broadcast ms p50 0.74  p95 3.45  p99 8.59  max 40.3 | moves/s 1981 | games 626/276 | errors {'already_in_room': 167, 'not_in_room': 51}
+== new-mem
+  move→broadcast ms p50 0.76  p95 3.26  p99 7.71  max 34.7 | moves/s 1984 | games 628/302 | errors {'already_in_room': 147, 'not_in_room': 64}
+== new-redis-1node
+  move→broadcast ms p50 0.89  p95 5.10  p99 12.54  max 57.4 | moves/s 1949 | games 615/289 | errors {'already_in_room': 348, 'evicted': 13, 'not_in_room': 88}
+== new-redis-2node-cross
+  move→broadcast ms p50 2.01  p95 11.13  p99 21.96  max 66.3 | moves/s 1881 | games 591/275 | errors {'already_in_room': 400, 'not_in_room': 154}
+
+$ loadtest -rooms 300 -duration 30s   (CPU saturated: "evicted" = the load generator itself falling behind)
+== old-mem
+  move→broadcast ms p50 4.59  p95 52.00  p99 84.45  max 185.9 | moves/s 4959 | games 1544/689 | errors {'already_in_room': 163, 'not_in_room': 316}
+== new-mem
+  move→broadcast ms p50 5.55  p95 49.67  p99 79.06  max 174.1 | moves/s 4873 | games 1537/707 | errors {'already_in_room': 187, 'not_in_room': 307}
+== new-redis-1node
+  move→broadcast ms p50 10.06  p95 53.81  p99 114.10  max 280.3 | moves/s 4359 | games 1371/623 | errors {'already_in_room': 747, 'evicted': 146, 'not_in_room': 328}
+== new-redis-2node-cross
+  move→broadcast ms p50 26.01  p95 149.73  p99 288.86  max 990.3 | moves/s 2905 | games 968/382 | errors {'already_in_room': 542, 'evicted': 23, 'not_in_room': 199}

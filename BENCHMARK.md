@@ -63,7 +63,7 @@
 
 ```bash
 cd backend && go build -o /tmp/gserver ./cmd/server && go build -o /tmp/loadtest ./cmd/loadtest
-PPROF=1 PORT=8080 /tmp/gserver &
+MAX_CONNS_PER_IP=0 PPROF=1 PORT=8080 /tmp/gserver &   # 压测从一台机器开几千连接：关掉单 IP 上限
 /tmp/loadtest -rooms 200 -duration 60s -out bench2-200.json
 /tmp/loadtest -rooms 500 -duration 60s -out bench2-500.json
 /tmp/loadtest -rooms 1000 -duration 60s -out bench2-1000.json
@@ -111,4 +111,29 @@ cd backend
 go test -run XXX -bench . -benchtime 3s ./internal/ai/
 go run ./cmd/aiarena -openings 20 -think 300ms -a hard -b v1:hard    # -b normal 则与 v2 自身其他难度对弈
 go run ./cmd/aiarena -openings 5 -think 300ms -trace                 # 打印 v2 落败局的逐手记录
+```
+
+## 7. 多实例的开销（v1.1）
+
+同一台 4 vCPU 机器上同时跑压测客户端、服务端与 redis-server 7.0，pvp，每档 30s。「重写前」为集群改造之前的提交 `8bba9f4`。两节点一档让每局的两名玩家分别连到不同节点，即**每一手都跨节点**（最坏情况）。原始输出 `docs/evidence/bench-cluster.txt`。
+
+| 配置（100 房，未饱和） | 落子→广播 p50 | p95 | p99 | moves/s |
+|---|---|---|---|---|
+| 重写前，单机内存 | 0.74 ms | 3.45 ms | 8.59 ms | 1981 |
+| 重写后，单机内存 | 0.76 ms | 3.26 ms | 7.71 ms | 1984 |
+| 单节点 + Redis（快照、租约、心跳） | 0.89 ms | 5.10 ms | 12.54 ms | 1949 |
+| 两节点 + Redis，每局跨节点 | 2.01 ms | 11.13 ms | 21.96 ms | 1881 |
+
+- 重写后的 hub（目录与总线抽象）在单机模式下与重写前持平。
+- 跨节点每手多两跳 Redis（指令 → 房主，帧 → 对手所在节点），p50 约 +1.3ms。
+- 300 房一档机器已饱和（压测客户端自身开始丢帧），用于暴露瓶颈：第一版总线逐条 `PUBLISH`，吞吐被 Redis 往返时间卡住，跨节点 2548 moves/s；改为把队列里攒下的消息合成一个 pipeline 发送、远端玩家位置加 5s 缓存（过期则由旧节点转发一次纠正）之后到 2905 moves/s，p50 39ms → 26ms。
+
+复现（需 redis-server）：
+
+```bash
+cd backend && go build -o /tmp/gserver ./cmd/server && go build -o /tmp/loadtest ./cmd/loadtest
+redis-server --port 6391 --save "" --daemonize yes
+MAX_CONNS_PER_IP=0 PORT=18104 NODE_ID=x1 REDIS_ADDR=localhost:6391 /tmp/gserver &
+MAX_CONNS_PER_IP=0 PORT=18105 NODE_ID=x2 REDIS_ADDR=localhost:6391 /tmp/gserver &
+/tmp/loadtest -rooms 100 -duration 30s -addr ws://localhost:18104/ws,ws://localhost:18105/ws
 ```

@@ -13,10 +13,18 @@ type WelcomeMsg struct {
 	Nick      string `json:"nick"`
 	Resumed   bool   `json:"resumed"`
 	ServerNow int64  `json:"serverNow"`
+	// RoomID is the live game a resumed session is still seated in (its
+	// game_state follows, possibly seconds later while a crashed node's
+	// game is being adopted); nil when there is none (PROTOCOL §1, v1.1).
+	RoomID *string `json:"roomId"`
 }
 
-func NewWelcome(playerID, token, nick string, resumed bool) *WelcomeMsg {
-	return &WelcomeMsg{Type: TWelcome, PlayerID: playerID, Token: token, Nick: nick, Resumed: resumed, ServerNow: NowMs()}
+func NewWelcome(playerID, token, nick string, resumed bool, roomID string) *WelcomeMsg {
+	w := &WelcomeMsg{Type: TWelcome, PlayerID: playerID, Token: token, Nick: nick, Resumed: resumed, ServerNow: NowMs()}
+	if roomID != "" {
+		w.RoomID = StrPtr(roomID)
+	}
+	return w
 }
 
 // PongMsg answers an application-level ping; ts echoes the client ts when

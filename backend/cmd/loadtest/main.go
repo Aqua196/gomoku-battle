@@ -158,7 +158,7 @@ func cpuRSS() (cpuSec float64, rssKB int64) {
 }
 
 func main() {
-	addr := flag.String("addr", "ws://localhost:8080/ws", "server ws endpoint")
+	addr := flag.String("addr", "ws://localhost:8080/ws", "server ws endpoint; a comma-separated list seats each pair's players on different nodes (cluster mode)")
 	rooms := flag.Int("rooms", 100, "concurrent games (pvp: 2 conns each; ai: 1)")
 	dur := flag.Duration("duration", 60*time.Second, "test duration")
 	interval := flag.Duration("move-interval", 50*time.Millisecond, "base think between moves (jittered)")
@@ -172,7 +172,8 @@ func main() {
 	var samples []serverSample
 	var smu sync.Mutex
 	stop := make(chan struct{})
-	go pollMetrics(*addr, stop, &samples, &smu, errs)
+	addrs := strings.Split(*addr, ",")
+	go pollMetrics(addrs[0], stop, &samples, &smu, errs)
 
 	cpu0, _ := cpuRSS()
 	start := time.Now()
@@ -197,9 +198,10 @@ func main() {
 			defer wg.Done()
 			var a, b *wsclient.Client
 			// connect_ms = dial + hello, i.e. a usable conn (M3-R12).
-			mk := func() *wsclient.Client {
+			mk := func(seat int) *wsclient.Client {
 				t0 := time.Now()
-				c, err := wsclient.DialOpts(*addr, nil, false) // M3-R1: real pongs
+				target := addrs[(2*i+seat)%len(addrs)]
+				c, err := wsclient.DialOpts(target, nil, false) // M3-R1: real pongs
 				if err != nil {
 					errs.add("dial")
 					return nil
@@ -217,12 +219,12 @@ func main() {
 				cmu.Unlock()
 				return c
 			}
-			a = mk()
+			a = mk(0)
 			if a == nil {
 				return
 			}
 			if *mode != "ai" {
-				b = mk()
+				b = mk(1)
 				if b == nil {
 					a.Close()
 					return

@@ -1,0 +1,12 @@
+# Load balancer for docker-compose.cluster.yml: round-robin over both app
+# instances, websockets included. Any instance can serve any player
+# (DESIGN §10), so no sticky sessions; a dead instance drops out on the
+# health check and its players reconnect to the other one.
+:8080 {
+	reverse_proxy app1:8080 app2:8080 {
+		lb_policy round_robin
+		health_uri /healthz
+		health_interval 1s
+		fail_duration 5s
+	}
+}

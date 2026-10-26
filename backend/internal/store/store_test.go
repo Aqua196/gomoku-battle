@@ -5,7 +5,6 @@
 package store
 
 import (
-	"sort"
 	"testing"
 	"time"
 
@@ -80,42 +79,6 @@ func storeContract(t *testing.T, name string, fresh func(t *testing.T) Store) {
 			seen[rec.Token] = true
 		}
 	})
-
-	t.Run(name+"/room_registry", func(t *testing.T) {
-		s := fresh(t)
-		r1 := RoomRecord{ID: "r_1", Name: "a", Status: "waiting", CreatedAt: 1}
-		r2 := RoomRecord{ID: "r_2", Name: "b", Status: "playing", IsAI: true, CreatedAt: 2}
-		s.UpsertRoom(r1)
-		s.UpsertRoom(r2)
-		got, ok := s.RoomByID("r_1")
-		if !ok || got.Name != "a" || got.Status != "waiting" {
-			t.Fatalf("RoomByID: %+v %v", got, ok)
-		}
-		if _, ok := s.RoomByID("r_nope"); ok {
-			t.Fatal("phantom room hit")
-		}
-		// Upsert replaces, not duplicates.
-		r1.Status = "playing"
-		s.UpsertRoom(r1)
-		if got, _ := s.RoomByID("r_1"); got.Status != "playing" {
-			t.Fatalf("upsert did not replace: %+v", got)
-		}
-		ids := []string{}
-		for _, r := range s.ListRooms() {
-			ids = append(ids, r.ID)
-		}
-		sort.Strings(ids)
-		if len(ids) != 2 || ids[0] != "r_1" || ids[1] != "r_2" {
-			t.Fatalf("ListRooms: %v", ids)
-		}
-		s.DeleteRoom("r_1")
-		if _, ok := s.RoomByID("r_1"); ok {
-			t.Fatal("RoomByID hit after DeleteRoom")
-		}
-		if got := s.ListRooms(); len(got) != 1 || got[0].ID != "r_2" {
-			t.Fatalf("ListRooms after delete: %+v", got)
-		}
-	})
 }
 
 // RedisStore-only: a killed backend is invisible to other clients — the
@@ -131,16 +94,12 @@ func TestRedisStoreDegradesOnDown(t *testing.T) {
 	if _, ok := st.PlayerByToken(rec.Token); ok {
 		t.Fatal("hit while redis down")
 	}
-	if _, ok := st.RoomByID("r_1"); ok {
-		t.Fatal("room hit while redis down")
-	}
-	if got := st.ListRooms(); len(got) != 0 {
-		t.Fatalf("ListRooms while down: %+v", got)
+	if got := st.RecentGames(10); len(got) != 0 {
+		t.Fatalf("RecentGames while down: %+v", got)
 	}
 	st.DeletePlayer("p_x")
-	st.DeleteRoom("r_x")
 	st.UpdateNick("p_x", "y")
-	st.UpsertRoom(RoomRecord{ID: "r_1"})
+	st.SaveGame(GameRecord{ID: "r_1"})
 }
 
 // RedisStore-only: NewRedisStore refuses to hand back a dead client so the
@@ -151,30 +110,6 @@ func TestRedisStoreDialFail(t *testing.T) {
 	mr.Close()
 	if _, err := NewRedisStore(addr); err == nil {
 		t.Fatal("expected dial failure")
-	}
-}
-
-// RedisStore-only: expired room keys leave corpse ids in the `rooms` set;
-// ListRooms must sweep them so the index does not leak monotonically.
-func TestRedisStoreRoomIndexSweep(t *testing.T) {
-	mr := miniredis.RunT(t)
-	st, err := NewRedisStore(mr.Addr())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < 5; i++ {
-		st.UpsertRoom(RoomRecord{ID: "r" + string(rune('a'+i))})
-	}
-	if got := len(st.ListRooms()); got != 5 {
-		t.Fatalf("before expiry: %d rooms", got)
-	}
-	mr.FastForward(2 * time.Hour)
-	if got := len(st.ListRooms()); got != 0 {
-		t.Fatalf("after expiry: %d rooms", got)
-	}
-	ids, _ := mr.SMembers("rooms") // empty set deletes the key: error is fine
-	if len(ids) != 0 {
-		t.Fatalf("rooms index leaked %v corpse ids", ids)
 	}
 }
 
@@ -209,8 +144,8 @@ func TestRedisStoreBoundedWhenDown(t *testing.T) {
 	mr.Close()
 	start := time.Now()
 	st.PlayerByID(rec.PlayerID)
-	st.UpsertRoom(RoomRecord{ID: "x"})
-	st.ListRooms()
+	st.SaveGame(GameRecord{ID: "x"})
+	st.RecentGames(10)
 	if d := time.Since(start); d > 3*time.Second {
 		t.Fatalf("degraded calls took %v (unbounded freeze)", d)
 	}

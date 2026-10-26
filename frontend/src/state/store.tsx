@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { WSClient, defaultWsUrl } from '../ws/client'
 import type { ServerMessage } from '../ws/protocol'
-import { createResumeWatchdog } from './clock'
+import { ADOPT_GRACE_MS, createResumeWatchdog } from './clock'
 import { initialState, reducer } from './reducer'
 import { StoreContext } from './useStore'
 import type { StoreApi } from './useStore'
@@ -44,10 +44,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           localStorage.setItem(LS_TOKEN, m.token)
           localStorage.setItem(LS_NICK, m.nick)
           // §1: game_state follows only when the resumed session had a live
-          // game — arm the watchdog to clear any stale board otherwise.
-          if (m.resumed) resumeWatchdogRef.current?.arm()
-          else resumeWatchdogRef.current?.cancel()
+          // game. v1.1 servers say which (welcome.roomId): wait for it long
+          // enough to ride out a node failover, or drop a stale board at
+          // once. Against a v1 server, wait the short grace window.
+          const watchdog = resumeWatchdogRef.current
           const watching = watchingRef.current
+          if (!m.resumed) watchdog?.cancel()
+          else if (m.roomId === undefined || watching) watchdog?.arm()
+          else if (m.roomId) watchdog?.arm(ADOPT_GRACE_MS)
+          else {
+            watchdog?.cancel()
+            queueMicrotask(() => dispatch({ type: 'CLEAR_GAME' }))
+          }
           if (m.resumed && watching) {
             // Re-attach before the store sees welcome; spectate_start then
             // refreshes the board (and cancels the watchdog like game_state).

@@ -87,3 +87,39 @@ jobs:
       - name: compose down
         if: always()
         run: docker compose down -v
+
+  cluster-gate:
+    # Two instances on one Redis behind Caddy (DESIGN §10): the gate runs
+    # through the balancer (clients land on alternating nodes), then the
+    # failover drill kills the instance owning a live game.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: compose up (lb + app1 + app2 + redis)
+        run: docker compose -f docker-compose.cluster.yml up -d --build --wait
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache-dependency-path: backend/go.sum
+      - name: gate through the balancer
+        working-directory: backend
+        run: WS_ADDR=ws://127.0.0.1:8080/ws go test -count=1 -v -run Container ./internal/integration/
+      - name: graceful restart drill (app1)
+        working-directory: backend
+        run: >-
+          DRILL_A=ws://127.0.0.1:8081/ws
+          DRILL_RESTART_A="docker compose -f ../docker-compose.cluster.yml restart app1"
+          go test -count=1 -v -run 'TestRestartDrill$' ./internal/integration/
+      - name: crash failover drill (kill app2)
+        working-directory: backend
+        run: >-
+          DRILL_A=ws://127.0.0.1:8081/ws DRILL_B=ws://127.0.0.1:8082/ws
+          DRILL_KILL_B="docker compose -f ../docker-compose.cluster.yml kill app2"
+          go test -count=1 -v -run 'TestClusterDrill$' ./internal/integration/
+      - name: logs
+        if: failure()
+        run: docker compose -f docker-compose.cluster.yml logs
+      - name: compose down
+        if: always()
+        run: docker compose -f docker-compose.cluster.yml down -v

@@ -1,7 +1,6 @@
 // Package store — RedisStore is the Store interface over Redis (M4):
-// sessions survive process restart (24h TTL, sliding on every read), the
-// room registry is durable-ish metadata (1h TTL; the hub deletes rooms on
-// game over anyway). Records are JSON values with token->id and
+// sessions survive process restart (24h TTL, sliding on every read) and
+// finished games are kept 30 days. Records are JSON values with token->id and
 // id->token secondary indexes; every miss or transport error degrades to
 // "not found" and logs a warning, matching the interface's error-free
 // contract. Every operation runs under a bounded timeout so a slow or
@@ -21,7 +20,6 @@ import (
 
 const (
 	playerTTL = 24 * time.Hour
-	roomTTL   = time.Hour
 	gameTTL   = 30 * 24 * time.Hour
 	opTimeout = 300 * time.Millisecond
 )
@@ -60,8 +58,6 @@ func (s *RedisStore) gameKey(id string) string         { return "g:" + id }
 func (s *RedisStore) playerGamesKey(id string) string  { return "pg:" + id }
 
 const recentGamesKey = "games:recent"
-
-func (s *RedisStore) roomKey(id string) string { return "r:" + id }
 
 func (s *RedisStore) put(rec *PlayerRecord) {
 	data, err := json.Marshal(rec)
@@ -167,99 +163,6 @@ func (s *RedisStore) DeletePlayer(playerID string) {
 	if _, err := pipe.Exec(ctx); err != nil {
 		slog.Warn("store: redis del player", "err", err)
 	}
-}
-
-func (s *RedisStore) UpsertRoom(r RoomRecord) {
-	data, err := json.Marshal(r)
-	if err != nil {
-		slog.Warn("store: marshal room", "err", err)
-		return
-	}
-	ctx, cancel := s.op()
-	defer cancel()
-	pipe := s.rdb.TxPipeline()
-	pipe.Set(ctx, s.roomKey(r.ID), data, roomTTL)
-	pipe.SAdd(ctx, "rooms", r.ID)
-	if _, err := pipe.Exec(ctx); err != nil {
-		slog.Warn("store: redis upsert room", "err", err)
-	}
-}
-
-func (s *RedisStore) RoomByID(id string) (RoomRecord, bool) {
-	ctx, cancel := s.op()
-	defer cancel()
-	data, err := s.rdb.Get(ctx, s.roomKey(id)).Bytes()
-	if err != nil {
-		if !errors.Is(err, redis.Nil) {
-			slog.Warn("store: redis get room", "err", err)
-		}
-		return RoomRecord{}, false
-	}
-	var r RoomRecord
-	if err := json.Unmarshal(data, &r); err != nil {
-		slog.Warn("store: unmarshal room", "err", err)
-		return RoomRecord{}, false
-	}
-	return r, true
-}
-
-func (s *RedisStore) DeleteRoom(id string) {
-	ctx, cancel := s.op()
-	defer cancel()
-	pipe := s.rdb.TxPipeline()
-	pipe.Del(ctx, s.roomKey(id))
-	pipe.SRem(ctx, "rooms", id)
-	if _, err := pipe.Exec(ctx); err != nil {
-		slog.Warn("store: redis del room", "err", err)
-	}
-}
-
-// ListRooms fetches all room records in one pipeline (no N+1 round trips)
-// and sweeps dead ids out of the `rooms` set so expired rooms cannot leak
-// permanently in the index.
-func (s *RedisStore) ListRooms() []RoomRecord {
-	ctx, cancel := s.op()
-	defer cancel()
-	ids, err := s.rdb.SMembers(ctx, "rooms").Result()
-	if err != nil {
-		slog.Warn("store: redis list rooms", "err", err)
-		return nil
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	pipe := s.rdb.TxPipeline()
-	cmds := make(map[string]*redis.StringCmd, len(ids))
-	for _, id := range ids {
-		cmds[id] = pipe.Get(ctx, s.roomKey(id))
-	}
-	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
-		slog.Warn("store: redis list rooms", "err", err)
-	}
-	out := make([]RoomRecord, 0, len(ids))
-	var dead []any
-	for _, id := range ids {
-		data, err := cmds[id].Bytes()
-		if err != nil {
-			if errors.Is(err, redis.Nil) {
-				dead = append(dead, id)
-			}
-			continue
-		}
-		var r RoomRecord
-		if err := json.Unmarshal(data, &r); err != nil {
-			slog.Warn("store: unmarshal room", "err", err)
-			dead = append(dead, id)
-			continue
-		}
-		out = append(out, r)
-	}
-	if len(dead) > 0 {
-		if err := s.rdb.SRem(ctx, "rooms", dead...).Err(); err != nil {
-			slog.Warn("store: redis sweep rooms", "err", err)
-		}
-	}
-	return out
 }
 
 // SaveGame writes the record (30-day TTL) and indexes it in the global

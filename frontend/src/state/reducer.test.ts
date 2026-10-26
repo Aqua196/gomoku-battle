@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { deriveYouColor, initialState, reducer } from './reducer'
 import {
+  ADOPT_GRACE_MS,
   RESUME_GRACE_MS,
   createResumeWatchdog,
   smoothClockOffset,
@@ -168,6 +169,13 @@ describe('store reducer', () => {
     expect(onExpire).toHaveBeenCalledTimes(1)
     vi.advanceTimersByTime(1)
     expect(onExpire).toHaveBeenCalledTimes(2)
+
+    // a longer window for a session the server says is still in a game
+    wd.arm(ADOPT_GRACE_MS)
+    vi.advanceTimersByTime(ADOPT_GRACE_MS - 1)
+    expect(onExpire).toHaveBeenCalledTimes(2)
+    vi.advanceTimersByTime(1)
+    expect(onExpire).toHaveBeenCalledTimes(3)
   })
 
   it('R10: serverNow drives the clock-offset estimate', () => {

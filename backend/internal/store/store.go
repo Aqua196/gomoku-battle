@@ -1,7 +1,8 @@
-// Package store abstracts persistence so M4 can swap MemStore for a Redis
-// implementation without touching hub/game code. The store owns durable-ish
-// records: player sessions (id + resume token + nick) and the room registry
-// (metadata only — runtime seats live in the hub).
+// Package store abstracts persistence so MemStore and the Redis
+// implementation are interchangeable for the hub. The store owns the
+// durable records: player sessions (id + resume token + nick) and finished
+// games for replay. Live, cluster-wide state (rooms, queue, game
+// snapshots) lives in internal/cluster.
 package store
 
 // PlayerRecord is a resumable player session. Token is the opaque credential
@@ -10,16 +11,6 @@ type PlayerRecord struct {
 	PlayerID string
 	Token    string
 	Nick     string
-}
-
-// RoomRecord is the room registry metadata. Seat assignments and the live
-// game actor are runtime concerns and stay in the hub.
-type RoomRecord struct {
-	ID        string
-	Name      string
-	Status    string // waiting|playing|finished
-	IsAI      bool
-	CreatedAt int64
 }
 
 // SeatRecord is one side of a recorded game.
@@ -62,15 +53,6 @@ type Store interface {
 	UpdateNick(playerID, nick string)
 	// DeletePlayer removes a session record entirely (TTL sweep).
 	DeletePlayer(playerID string)
-
-	// UpsertRoom inserts or replaces a room record.
-	UpsertRoom(r RoomRecord)
-	// RoomByID fetches a room record.
-	RoomByID(id string) (RoomRecord, bool)
-	// DeleteRoom removes a room record.
-	DeleteRoom(id string)
-	// ListRooms returns all room records (any status).
-	ListRooms() []RoomRecord
 
 	// SaveGame stores a finished game and indexes it under both seats.
 	SaveGame(g GameRecord)

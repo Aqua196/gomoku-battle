@@ -14,7 +14,6 @@ type MemStore struct {
 	mu          sync.RWMutex
 	playersByID map[string]PlayerRecord
 	playerIDByT map[string]string // token -> playerID
-	rooms       map[string]RoomRecord
 
 	games       map[string]GameRecord
 	recent      []string            // game ids, oldest first, capped at MaxRecentGames
@@ -25,7 +24,6 @@ func NewMemStore() *MemStore {
 	return &MemStore{
 		playersByID: make(map[string]PlayerRecord),
 		playerIDByT: make(map[string]string),
-		rooms:       make(map[string]RoomRecord),
 		games:       make(map[string]GameRecord),
 		playerGames: make(map[string][]string),
 	}
@@ -87,35 +85,6 @@ func (s *MemStore) DeletePlayer(playerID string) {
 		delete(s.playerIDByT, rec.Token)
 		delete(s.playersByID, playerID)
 	}
-}
-
-func (s *MemStore) UpsertRoom(r RoomRecord) {
-	s.mu.Lock()
-	s.rooms[r.ID] = r
-	s.mu.Unlock()
-}
-
-func (s *MemStore) RoomByID(id string) (RoomRecord, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	r, ok := s.rooms[id]
-	return r, ok
-}
-
-func (s *MemStore) DeleteRoom(id string) {
-	s.mu.Lock()
-	delete(s.rooms, id)
-	s.mu.Unlock()
-}
-
-func (s *MemStore) ListRooms() []RoomRecord {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	out := make([]RoomRecord, 0, len(s.rooms))
-	for _, r := range s.rooms {
-		out = append(out, r)
-	}
-	return out
 }
 
 func (s *MemStore) SaveGame(g GameRecord) {

@@ -1,0 +1,16 @@
+$ scripts/cluster-drill.sh
+== drill 1: owner crash (SIGKILL)
+    drill_test.go:48: game r_FlFi_jYhMw0: 3 moves played, owner is node B; killing it
+    drill_test.go:55: node A adopted the game and re-attached alice after 6.691s (lease lapse + recovery scan)
+    drill_test.go:69: bob reconnected to node A and resumed at move 3
+    drill_test.go:80: game_over: winner=black reason=five
+    drill_test.go:102: record r_FlFi_jYhMw0: 9 moves, winner black — nothing lost across the crash
+--- PASS: TestClusterDrill (6.77s)
+ok  	github.com/Aqua196/gomoku-battle/backend/internal/integration	6.781s
+scripts/cluster-drill.sh: line 40: 21398 Killed                  nohup "$work/node.sh" "$1" "$2" > /dev/null 2>&1
+== drill 2: graceful restart (SIGTERM) with an AI game
+    drill_test.go:135: AI game at move 2; restarting the server
+    drill_test.go:156: game back at move 2, 171ms after the restart began
+    drill_test.go:162: the restored AI answered move 3 — game continues
+--- PASS: TestRestartDrill (0.20s)
+ok  	github.com/Aqua196/gomoku-battle/backend/internal/integration	0.209s

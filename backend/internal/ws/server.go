@@ -288,8 +288,12 @@ func (sess *session) handleHello(data []byte) {
 	p, resumed := sess.srv.hub.Hello(sess.c, nick, in.Token)
 	sess.player = p
 	_ = sess.c.ws.SetReadDeadline(time.Now().Add(sess.srv.cfg.WSPongWait))
-	sess.send(protocol.NewWelcome(p.ID(), p.Token(), p.Nick(), resumed))
+	roomID := ""
 	if resumed {
+		roomID = sess.srv.hub.Reseat(p)
+	}
+	sess.send(protocol.NewWelcome(p.ID(), p.Token(), p.Nick(), resumed, roomID))
+	if roomID != "" {
 		// welcome first, then the live game view (PROTOCOL §1).
 		sess.srv.hub.ResumeGame(p)
 	}

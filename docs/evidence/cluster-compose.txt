@@ -1,0 +1,27 @@
+$ docker compose -f docker-compose.cluster.yml up -d --wait   # lb (Caddy) + app1 + app2 + redis
+app1: Up About a minute (healthy)
+app2: Up 5 seconds (healthy)
+lb: Up 33 seconds
+redis: Up About a minute (healthy)
+
+$ for i in 1 2 3 4; do curl -s localhost:8080/metrics | jq -r .node; done   # round-robin
+app2
+app1
+app2
+app1
+
+$ WS_ADDR=ws://localhost:8080/ws go test -v -run Container ./internal/integration/   # through the balancer
+    container_test.go:108: match→game→five win: PASS
+    container_test.go:158: disconnect→token reconnect restore: PASS
+    container_test.go:189: play_ai full round-trip: PASS
+--- PASS: TestContainerMatchGameReconnectAI (0.07s)
+ok  	github.com/Aqua196/gomoku-battle/backend/internal/integration	0.079s
+
+$ DRILL_A=ws://localhost:8081/ws DRILL_B=ws://localhost:8082/ws DRILL_KILL_B="docker compose -f docker-compose.cluster.yml kill app2" go test -v -run TestClusterDrill ./internal/integration/
+    drill_test.go:48: game r_ADsHXMlGAN8: 3 moves played, owner is node B; killing it
+    drill_test.go:55: node A adopted the game and re-attached alice after 6.511s (lease lapse + recovery scan)
+    drill_test.go:69: bob reconnected to node A and resumed at move 3
+    drill_test.go:80: game_over: winner=black reason=five
+    drill_test.go:102: record r_ADsHXMlGAN8: 9 moves, winner black — nothing lost across the crash
+--- PASS: TestClusterDrill (6.96s)
+ok  	github.com/Aqua196/gomoku-battle/backend/internal/integration	6.972s

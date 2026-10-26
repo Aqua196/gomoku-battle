@@ -1,15 +1,24 @@
 // Command server assembles and runs the backend: the websocket gateway,
 // health/metrics endpoints, optional pprof (PPROF=1), optional static
-// hosting of ../frontend/dist (PROTOCOL §7/§8, D8), and the pluggable
-// store — Redis when REDIS_ADDR is set and reachable, MemStore otherwise
-// (the fallback is logged, never silent). Port: :8080 via PORT.
+// hosting of ../frontend/dist (PROTOCOL §7/§8, D8), and its state:
 //
-// SIGINT/SIGTERM shut down gracefully: stop accepting, send every websocket
-// a 1001 close so clients reconnect, wait for in-flight bookkeeping.
+//   - REDIS_ADDR set and reachable: sessions and records in Redis, and the
+//     node joins the cluster on that Redis (DESIGN §10) — any number of
+//     instances behind a load balancer act as one server, games survive a
+//     restart or a crashed instance. NODE_ID names the node (default:
+//     hostname plus a random suffix).
+//   - otherwise: one in-memory process (the fallback is logged, never
+//     silent).
+//
+// SIGINT/SIGTERM shut down gracefully: hand owned games off (cluster mode),
+// stop accepting, send every websocket a 1001 close so clients reconnect,
+// wait for in-flight bookkeeping. Port: :8080 via PORT.
 package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -19,10 +28,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Aqua196/gomoku-battle/backend/internal/cluster"
 	"github.com/Aqua196/gomoku-battle/backend/internal/hub"
 	"github.com/Aqua196/gomoku-battle/backend/internal/protocol"
 	"github.com/Aqua196/gomoku-battle/backend/internal/store"
 	"github.com/Aqua196/gomoku-battle/backend/internal/ws"
+	"github.com/redis/go-redis/v9"
 )
 
 // shutdownGrace bounds how long a shutdown waits for connections to drain.
@@ -37,23 +48,34 @@ func main() {
 		port = "8080"
 	}
 
-	st := store.Store(store.NewMemStore())
-	if addr := os.Getenv("REDIS_ADDR"); addr != "" {
-		if rdb, err := store.NewRedisStore(addr); err == nil {
-			st = rdb
-			slog.Info("store: redis", "addr", addr)
-		} else {
-			slog.Warn("store: redis unreachable, falling back to in-memory",
-				"addr", addr, "err", err)
-		}
-	}
-
 	cfg := protocol.DefaultConfig()
 	cfg.TrustProxy = os.Getenv("TRUST_PROXY") == "1"
 	if v, ok := envInt("MAX_CONNS_PER_IP"); ok {
 		cfg.MaxConnsPerIP = v // 0 disables (load tests open thousands from one host)
 	}
-	h := hub.New(st, cfg)
+
+	var h *hub.Hub
+	clustered := false
+	if addr := os.Getenv("REDIS_ADDR"); addr != "" {
+		if st, err := store.NewRedisStore(addr); err == nil {
+			rdb := redis.NewClient(&redis.Options{Addr: addr})
+			node := nodeID()
+			h = hub.NewNode(st, cfg, hub.Options{
+				Node: node,
+				Dir:  cluster.NewRedisDirectory(rdb),
+				Bus:  cluster.NewRedisBus(rdb, node),
+			})
+			clustered = true
+			slog.Info("state: redis cluster", "addr", addr, "node", node)
+		} else {
+			slog.Warn("state: redis unreachable, falling back to in-memory",
+				"addr", addr, "err", err)
+		}
+	}
+	if h == nil {
+		cfg.LeaseTTL = 0 // nothing outlives this process: no snapshots, no leases
+		h = hub.New(store.NewMemStore(), cfg)
+	}
 	srv := ws.NewServer(h, cfg, os.Getenv("ALLOW_ANY_ORIGIN") == "1")
 
 	staticDir := findStaticDir("../frontend/dist", "frontend/dist")
@@ -81,6 +103,9 @@ func main() {
 	}
 
 	slog.Info("shutting down")
+	if clustered {
+		h.Handoff() // games resume on another node (or this one restarted) at once
+	}
 	sctx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
 	defer cancel()
 	if err := httpSrv.Shutdown(sctx); err != nil {
@@ -89,8 +114,23 @@ func main() {
 	if err := srv.Shutdown(sctx); err != nil {
 		slog.Warn("websocket drain", "err", err)
 	}
-	h.Stop()
+	h.Close()
 	slog.Info("bye")
+}
+
+// nodeID names this process in the cluster: NODE_ID, else the hostname
+// (the container id under compose) plus a random suffix, unique per start.
+func nodeID() string {
+	if id := os.Getenv("NODE_ID"); id != "" {
+		return id
+	}
+	host, err := os.Hostname()
+	if err != nil {
+		host = "node"
+	}
+	var b [3]byte
+	_, _ = rand.Read(b[:])
+	return host + "-" + hex.EncodeToString(b[:])
 }
 
 // envInt reads a non-negative integer environment variable.

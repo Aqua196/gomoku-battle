@@ -8,6 +8,10 @@
     exists — the provider clears the stale view once this window elapses. */
 export const RESUME_GRACE_MS = 1500
 
+/** §1 v1.1: welcome named our live game — its game_state may take a node
+    failover (lease lapse + adoption, ~7s) to arrive. */
+export const ADOPT_GRACE_MS = 15_000
+
 /** EMA estimate of the client→server clock skew. */
 export function smoothClockOffset(prev: number | null, sample: number): number {
   return prev === null ? sample : prev + 0.3 * (sample - prev)
@@ -17,9 +21,9 @@ export function smoothClockOffset(prev: number | null, sample: number): number {
 export function createResumeWatchdog(onExpire: () => void, ms = RESUME_GRACE_MS) {
   let t: ReturnType<typeof setTimeout> | null = null
   return {
-    arm() {
+    arm(after = ms) {
       this.cancel()
-      t = setTimeout(onExpire, ms)
+      t = setTimeout(onExpire, after)
     },
     cancel() {
       if (t !== null) {

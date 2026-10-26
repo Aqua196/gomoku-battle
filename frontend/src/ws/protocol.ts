@@ -126,6 +126,9 @@ export interface WelcomeMsg {
   resumed: boolean
   /** server clock ts for client offset estimation (§1) */
   serverNow: number
+  /** v1.1: the live game a resumed session is still seated in, else null
+      (absent from v1 servers) */
+  roomId?: string | null
 }
 export interface PongMsg {
   type: 'pong'

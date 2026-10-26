@@ -18,7 +18,7 @@ type SendFunc func(playerID string, data []byte)
 type OverFunc func(roomID string, res Result)
 
 // Result is the actor's final report. Reason is empty when the actor died
-// without a verdict (a recovered panic).
+// without a verdict (a recovered panic, or Halt).
 type Result struct {
 	Black, White Seat
 	Moves        []protocol.Pos
@@ -26,6 +26,7 @@ type Result struct {
 	Reason       string
 	StartedAt    time.Time
 	EndedAt      time.Time
+	Halted       bool // stopped by Halt: no verdict, nothing to settle
 }
 
 // Seat binds one side of the game to a player.
@@ -50,9 +51,18 @@ type Actor struct {
 	mailbox chan func()
 	done    chan struct{}
 
-	// observer is an optional post-state-change hook (the AI driver uses
-	// it); invoked inside the actor goroutine, so it must not block.
-	observer func(*protocol.GameState)
+	// observers are post-state-change hooks (the AI driver, the hub's
+	// snapshot persister); invoked inside the actor goroutine, so they must
+	// not block.
+	observers []func(*protocol.GameState)
+
+	// restored marks a game rebuilt from a snapshot after its previous
+	// owner died: no game_start, human seats start offline (PROTOCOL §5
+	// windows from the moment of restore).
+	restored bool
+	// halted marks a game stopped without a verdict (its node hands it
+	// over); Result.Halted tells the hub not to settle anything.
+	halted bool
 
 	board      Board
 	turn       Color
@@ -94,11 +104,39 @@ func New(roomID string, black, white Seat, cfg protocol.Config, send SendFunc, o
 	}
 }
 
+// Restore rebuilds a game from its move list (cluster failover / restart,
+// DESIGN §10). Seats are taken as given — the hub passes humans offline,
+// so each gets a fresh reconnect window and, with both away, the verdict
+// is suspended until one returns. The turn clock restarts in full.
+func Restore(roomID string, black, white Seat, moves []protocol.Pos, startedAt time.Time,
+	cfg protocol.Config, send SendFunc, onOver OverFunc) *Actor {
+	a := New(roomID, black, white, cfg, send, onOver)
+	a.restored = true
+	a.startedAt = startedAt
+	for _, m := range moves {
+		a.board.Place(m.X, m.Y, a.turn)
+		a.moveNumber++
+		a.lastMove = &protocol.Pos{X: m.X, Y: m.Y}
+		a.moves = append(a.moves, m)
+		a.turn = a.turn.Other()
+	}
+	return a
+}
+
+// Halt stops the game without a verdict and without telling anyone: the
+// hub uses it when this node gives the game up (shutdown, lost lease).
+func (a *Actor) Halt() {
+	a.post(func() {
+		a.halted = true
+		a.status = protocol.RoomFinished
+	})
+}
+
 // Start launches the actor goroutine; game_start is its first emission.
 func (a *Actor) Start() { go a.run() }
 
-// SetObserver installs the state-change hook before Start.
-func (a *Actor) SetObserver(fn func(*protocol.GameState)) { a.observer = fn }
+// AddObserver installs a state-change hook before Start.
+func (a *Actor) AddObserver(fn func(*protocol.GameState)) { a.observers = append(a.observers, fn) }
 
 // Done exposes the actor's completion channel for lifecycle-bound helpers
 // (e.g. the AI driver exits when the game ends).
@@ -166,33 +204,26 @@ func (a *Actor) run() {
 		a.onOver(a.roomID, a.result())
 	}()
 
-	a.startedAt = time.Now()
-	a.turnDL = time.Now().Add(a.cfg.MoveTimeout)
-	a.sendGameStart()
+	now := time.Now()
+	a.turnDL = now.Add(a.cfg.MoveTimeout)
+	if a.restored {
+		for _, c := range []Color{Black, White} {
+			if !a.seat(c).Connected {
+				a.reconAt[c] = now.Add(a.cfg.ReconnectWindow)
+			}
+		}
+		if a.bothOffline() {
+			a.bothOfflineAt = now
+		}
+		a.notify() // the AI may be the side to move
+	} else {
+		a.startedAt = now
+		a.sendGameStart()
+	}
 
 	turnT = time.NewTimer(time.Until(a.turnDL))
-
-	for {
-		select {
-		case f := <-a.mailbox:
-			f()
-		case <-turnT.C:
-			// R6/§5: drain already-arrived events before judging; an
-			// on-time move or reconnect must never be lost to select's
-			// random pick between two ready cases.
-			a.drainMailbox()
-			a.onTurnTimeout()
-		case <-reconC:
-			a.drainMailbox()
-			a.onReconTimeout()
-		case <-abandonC:
-			a.drainMailbox()
-			a.onAbandonTimeout()
-		}
-		if a.status != protocol.RoomPlaying {
-			break
-		}
-		// Re-arm all timers from the current deadlines.
+	// arm points every timer at the current deadlines.
+	arm := func() {
 		resetTimer(turnT, time.Until(a.turnDL))
 		if dl, ok := a.earliestRecon(); ok {
 			d := time.Until(dl)
@@ -222,6 +253,30 @@ func (a *Actor) run() {
 			}
 			abandonC = nil
 		}
+	}
+	arm()
+
+	for {
+		select {
+		case f := <-a.mailbox:
+			f()
+		case <-turnT.C:
+			// R6/§5: drain already-arrived events before judging; an
+			// on-time move or reconnect must never be lost to select's
+			// random pick between two ready cases.
+			a.drainMailbox()
+			a.onTurnTimeout()
+		case <-reconC:
+			a.drainMailbox()
+			a.onReconTimeout()
+		case <-abandonC:
+			a.drainMailbox()
+			a.onAbandonTimeout()
+		}
+		if a.status != protocol.RoomPlaying {
+			return
+		}
+		arm()
 	}
 }
 
@@ -475,10 +530,14 @@ func (a *Actor) finish(winner Color, reason string) {
 	a.notify()
 }
 
-// notify reports the newest state to the observer, if any (AI driver).
+// notify reports the newest state to every observer.
 func (a *Actor) notify() {
-	if a.observer != nil {
-		a.observer(a.snapshot())
+	if len(a.observers) == 0 {
+		return
+	}
+	gs := a.snapshot()
+	for _, fn := range a.observers {
+		fn(gs)
 	}
 }
 
@@ -531,9 +590,10 @@ func (a *Actor) result() Result {
 		StartedAt: a.startedAt,
 		EndedAt:   time.Now(),
 	}
-	if a.status == protocol.RoomFinished {
+	if a.status == protocol.RoomFinished && !a.halted {
 		r.Winner, r.Reason = a.winner, a.winReason
 	}
+	r.Halted = a.halted
 	return r
 }
 

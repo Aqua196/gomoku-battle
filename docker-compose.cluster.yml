@@ -1,0 +1,54 @@
+# Cluster mode (DESIGN §10): two app instances on one Redis behind Caddy.
+#   docker compose -f docker-compose.cluster.yml up --build
+# serves the app on :8080 (round-robin); each instance is also published
+# directly (:8081, :8082) for failover drills. Kill one instance mid-game:
+# the other adopts its games when the lease lapses (~6s) and players'
+# clients reconnect through the balancer.
+x-app: &app
+  build: .
+  environment: &app-env
+    PORT: "8080"
+    REDIS_ADDR: "redis:6379"
+    TRUST_PROXY: "1" # behind Caddy: rate limits per real client (X-Forwarded-For)
+  depends_on:
+    redis:
+      condition: service_healthy
+
+services:
+  lb:
+    image: caddy:2.8-alpine
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      app1:
+        condition: service_healthy
+      app2:
+        condition: service_healthy
+
+  app1:
+    <<: *app
+    environment:
+      <<: *app-env
+      NODE_ID: app1
+    ports:
+      - "8081:8080"
+
+  app2:
+    <<: *app
+    environment:
+      <<: *app-env
+      NODE_ID: app2
+    ports:
+      - "8082:8080"
+
+  redis:
+    image: redis:7-alpine
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 2s
+      retries: 30

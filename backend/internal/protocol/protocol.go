@@ -138,6 +138,14 @@ type Config struct {
 	// TrustProxy takes the client address from the first X-Forwarded-For
 	// hop instead of the socket peer (only behind a trusted reverse proxy).
 	TrustProxy bool
+
+	// LeaseTTL is how long a node's claim on a game outlives its last
+	// renewal (DESIGN §10): the failover delay when a node dies. Zero runs
+	// without leases, snapshots or recovery (single in-memory process).
+	LeaseTTL time.Duration
+	// RecoverInterval is how often a node renews its leases, heartbeats,
+	// and looks for games whose owner is gone.
+	RecoverInterval time.Duration
 }
 
 // DefaultConfig returns the production constants from PROTOCOL §6.
@@ -158,6 +166,8 @@ func DefaultConfig() Config {
 		MsgRate:         20,
 		MsgBurst:        40,
 		MaxConnsPerIP:   32,
+		LeaseTTL:        6 * time.Second,
+		RecoverInterval: time.Second,
 	}
 }
 

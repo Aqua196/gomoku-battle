@@ -33,6 +33,7 @@
 - 若 `hello.token` 命中一个**已断线**的玩家会话：绑定新连接到该 `playerId`，`resumed=true`；若该玩家在存活对局中，随后立即下发一条 `game_state`；若无存活对局，客户端必须在短超时（~1.5s）后自行清空本地对局视图回到大厅。
 - 若 `hello.token` 命中**仍在线**的会话：**顶替（takeover）**——服务端立即关闭旧连接、把会话绑定到新连接，`resumed=true`（token 即凭证；多开会话后者赢）。
 - `welcome` 携带 `"serverNow":<ts>` 供客户端估时钟偏差。
+- `welcome` 携带 `"roomId":"r_x"|null`（v1.1）：恢复的会话仍在某个进行中的对局里时为该房间 id，其 `game_state` 随后到达——多实例部署下若原房主节点刚崩溃，可能要等对局被接管（约 `LeaseTTL`，默认 6s）才到，客户端应保留棋盘等待；为 `null` 时没有对局，客户端可立即回大厅。
 - 超时未 hello → `error{code:"hello_timeout"}` 后关闭。
 
 ### 心跳
@@ -149,6 +150,7 @@
 - `reconnectDeadline` 与 `turnDeadline` 独立计时，先到先生效。**竞先裁决**：计时器触发时必须先排空 mailbox 中已到达的事件再判负（按时到达的落子/重连不得被 select 随机性丢弃）。
 - **双方同时断线**：判负裁决挂起——任一方重连时再结算：重连方自身窗口已过 → 重连方负；否则若对手窗口已过 → 对手负；否则对局继续。双方都永远不回则对局挂起至会话过期清理。
 - 断线时若轮到断线方，`turnDeadline` 照常走；若轮到在线方，在线方仍须在 `turnDeadline` 内落子。
+- **服务端重启 / 节点故障（v1.1）**：进行中的对局由其它节点（或重启后的同一服务）从快照恢复，棋盘与着法不变；恢复时双方均视为断线，各重新获得完整的 `RECONNECT_WINDOW`，回合计时重新开始；仍连着的客户端会直接收到一帧 `game_state`，断开的客户端按 §1 带 token 重连即可。
 
 ## 6. 时间常量（服务端实现为可配置参数，测试可缩短）
 
@@ -169,8 +171,9 @@
 ## 7. HTTP 端点（同一端口）
 
 - `GET /healthz` → `200 "ok"`
-- `GET /metrics` → `{"connections":int,"lobbyPlayers":int,"rooms":int,"activeGames":int,"gamesPlayed":int,"totalMoves":int,"movesPerSec":float,"aiGames":int}`
+- `GET /metrics` → `{"node":str,"connections":int,"lobbyPlayers":int,"rooms":int,"activeGames":int,"ownedGames":int,"gamesPlayed":int,"totalMoves":int,"movesPerSec":float,"aiGames":int}`
   - `movesPerSec`：trailing-60s 窗口内接受落子数 / 60；`aiGames`：人机局启动累计（≠完成数）；其余为瞬时快照。
+  - 多实例时 `rooms`/`activeGames` 为全集群数，其余为本节点（`node`）数；`ownedGames` 为本节点作为房主运行的对局数。
 - `GET /api/games`、`/api/games/{id}`、`/api/players/{id}/games`：棋谱只读接口，见 §12
 - `/debug/pprof/*`：仅当环境变量 `PPROF=1` 时挂载
 - 生产模式后端直接托管 `frontend/dist` 静态资源（SPA fallback 到 index.html）；开发模式用 vite proxy 转发 `/ws` `/healthz` `/metrics`，无需 CORS。
