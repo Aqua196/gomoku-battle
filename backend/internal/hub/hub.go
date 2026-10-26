@@ -56,6 +56,8 @@ type Player struct {
 	// isAI marks the pseudo-player seated in an isAI room: it never holds
 	// a conn, never enters h.players, and renders as connected.
 	isAI bool
+	// watching is the room this lobby player spectates ("" for none).
+	watching string
 }
 
 // ID returns the player id.
@@ -70,9 +72,10 @@ func (p *Player) Token() string { return p.rec.Token }
 // roomEntry adds runtime seats and the game actor to a store.RoomRecord.
 // seats[0] is black, seats[1] is white.
 type roomEntry struct {
-	meta  store.RoomRecord
-	seats [2]*Player
-	actor *game.Actor
+	meta     store.RoomRecord
+	seats    [2]*Player
+	actor    *game.Actor
+	watchers map[*Player]struct{}
 }
 
 // Metrics is the /metrics JSON payload (PROTOCOL §7).
@@ -371,12 +374,13 @@ func protoRoomLocked(e *roomEntry) protocol.Room {
 		})
 	}
 	return protocol.Room{
-		ID:        e.meta.ID,
-		Name:      e.meta.Name,
-		Status:    e.meta.Status,
-		Players:   players,
-		IsAI:      e.meta.IsAI,
-		CreatedAt: e.meta.CreatedAt,
+		ID:         e.meta.ID,
+		Name:       e.meta.Name,
+		Status:     e.meta.Status,
+		Players:    players,
+		IsAI:       e.meta.IsAI,
+		CreatedAt:  e.meta.CreatedAt,
+		Spectators: len(e.watchers),
 	}
 }
 
@@ -393,6 +397,40 @@ func (h *Hub) dequeueLocked(p *Player) bool {
 			break
 		}
 	}
+	return true
+}
+
+// unwatchLocked detaches p from the game it spectates; the returned exit
+// is finished after the lock (actor post + spectate_end). Caller holds h.mu.
+func (h *Hub) unwatchLocked(p *Player) watchExit {
+	if p.watching == "" {
+		return watchExit{}
+	}
+	x := watchExit{roomID: p.watching}
+	if e := h.rooms[p.watching]; e != nil {
+		delete(e.watchers, p)
+		x.actor = e.actor
+	}
+	p.watching = ""
+	return x
+}
+
+// watchExit is a spectator detachment still to be announced.
+type watchExit struct {
+	actor  *game.Actor
+	roomID string
+}
+
+// finish tells the actor and the player, outside h.mu. It reports whether
+// anything was detached (so the caller refreshes the room list counts).
+func (x watchExit) finish(h *Hub, p *Player) bool {
+	if x.roomID == "" {
+		return false
+	}
+	if x.actor != nil {
+		x.actor.Unwatch(p.ID())
+	}
+	h.reply(p, &protocol.SpectateEndMsg{Type: protocol.TSpectateEnd, RoomID: x.roomID})
 	return true
 }
 

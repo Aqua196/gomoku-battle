@@ -15,6 +15,10 @@ type MemStore struct {
 	playersByID map[string]PlayerRecord
 	playerIDByT map[string]string // token -> playerID
 	rooms       map[string]RoomRecord
+
+	games       map[string]GameRecord
+	recent      []string            // game ids, oldest first, capped at MaxRecentGames
+	playerGames map[string][]string // player id -> game ids, oldest first, capped
 }
 
 func NewMemStore() *MemStore {
@@ -22,6 +26,8 @@ func NewMemStore() *MemStore {
 		playersByID: make(map[string]PlayerRecord),
 		playerIDByT: make(map[string]string),
 		rooms:       make(map[string]RoomRecord),
+		games:       make(map[string]GameRecord),
+		playerGames: make(map[string][]string),
 	}
 }
 
@@ -110,6 +116,92 @@ func (s *MemStore) ListRooms() []RoomRecord {
 		out = append(out, r)
 	}
 	return out
+}
+
+func (s *MemStore) SaveGame(g GameRecord) {
+	g.Moves = cloneMoves(g.Moves)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, dup := s.games[g.ID]; dup {
+		s.games[g.ID] = g
+		return
+	}
+	s.games[g.ID] = g
+	s.recent = appendCapped(s.recent, g.ID, MaxRecentGames)
+	for _, seat := range []SeatRecord{g.Black, g.White} {
+		if seat.IsAI || seat.PlayerID == "" {
+			continue
+		}
+		s.playerGames[seat.PlayerID] = appendCapped(s.playerGames[seat.PlayerID], g.ID, MaxPlayerGames)
+	}
+	s.collect()
+}
+
+// collect drops records that no index lists any more.
+func (s *MemStore) collect() {
+	if len(s.games) <= MaxRecentGames {
+		return
+	}
+	live := make(map[string]bool, len(s.recent))
+	for _, id := range s.recent {
+		live[id] = true
+	}
+	for _, ids := range s.playerGames {
+		for _, id := range ids {
+			live[id] = true
+		}
+	}
+	for id := range s.games {
+		if !live[id] {
+			delete(s.games, id)
+		}
+	}
+}
+
+func (s *MemStore) GameByID(id string) (GameRecord, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	g, ok := s.games[id]
+	g.Moves = cloneMoves(g.Moves)
+	return g, ok
+}
+
+func (s *MemStore) RecentGames(limit int) []GameRecord {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.newestLocked(s.recent, limit)
+}
+
+func (s *MemStore) PlayerGames(playerID string, limit int) []GameRecord {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.newestLocked(s.playerGames[playerID], limit)
+}
+
+func (s *MemStore) newestLocked(ids []string, limit int) []GameRecord {
+	out := make([]GameRecord, 0, min(limit, len(ids)))
+	for i := len(ids) - 1; i >= 0 && len(out) < limit; i-- {
+		if g, ok := s.games[ids[i]]; ok {
+			g.Moves = cloneMoves(g.Moves)
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
+func appendCapped(ids []string, id string, limit int) []string {
+	ids = append(ids, id)
+	if len(ids) > limit {
+		ids = append(ids[:0:0], ids[len(ids)-limit:]...)
+	}
+	return ids
+}
+
+func cloneMoves(m [][2]int) [][2]int {
+	if m == nil {
+		return nil
+	}
+	return append([][2]int(nil), m...)
 }
 
 // randToken returns n cryptographically random bytes, base64url-encoded.

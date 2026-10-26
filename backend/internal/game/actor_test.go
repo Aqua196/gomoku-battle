@@ -70,7 +70,7 @@ func startTestActor(t *testing.T, cfg protocol.Config) (*Actor, *capture, string
 	cap := newCapture()
 	black := Seat{PlayerID: "p_black", Nick: "black", Connected: true}
 	white := Seat{PlayerID: "p_white", Nick: "white", Connected: true}
-	a := New("r_test", black, white, cfg, cap.send, func(roomID string) { cap.over <- roomID })
+	a := New("r_test", black, white, cfg, cap.send, func(roomID string, _ Result) { cap.over <- roomID })
 	a.Start()
 	return a, cap, "p_black", "p_white"
 }
@@ -214,7 +214,7 @@ func TestActorPanicStillCallsOnOver(t *testing.T) {
 	a := New("r_panic",
 		Seat{PlayerID: "p_black", Nick: "b", Connected: true},
 		Seat{PlayerID: "p_white", Nick: "w", Connected: true},
-		cfg, cap.send, func(roomID string) { cap.over <- roomID })
+		cfg, cap.send, func(roomID string, _ Result) { cap.over <- roomID })
 	a.Start()
 	a.post(func() { panic("boom") })
 	if room := waitOver(t, cap); room != "r_panic" {

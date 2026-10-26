@@ -22,6 +22,7 @@ import (
 const (
 	playerTTL = 24 * time.Hour
 	roomTTL   = time.Hour
+	gameTTL   = 30 * 24 * time.Hour
 	opTimeout = 300 * time.Millisecond
 )
 
@@ -55,7 +56,12 @@ func (s *RedisStore) op() (context.Context, context.CancelFunc) {
 func (s *RedisStore) playerKey(id string) string       { return "p:" + id }
 func (s *RedisStore) playerTokenKey(t string) string   { return "pt:" + t }
 func (s *RedisStore) playerTokIdxKey(id string) string { return "pti:" + id }
-func (s *RedisStore) roomKey(id string) string         { return "r:" + id }
+func (s *RedisStore) gameKey(id string) string         { return "g:" + id }
+func (s *RedisStore) playerGamesKey(id string) string  { return "pg:" + id }
+
+const recentGamesKey = "games:recent"
+
+func (s *RedisStore) roomKey(id string) string { return "r:" + id }
 
 func (s *RedisStore) put(rec *PlayerRecord) {
 	data, err := json.Marshal(rec)
@@ -251,6 +257,101 @@ func (s *RedisStore) ListRooms() []RoomRecord {
 	if len(dead) > 0 {
 		if err := s.rdb.SRem(ctx, "rooms", dead...).Err(); err != nil {
 			slog.Warn("store: redis sweep rooms", "err", err)
+		}
+	}
+	return out
+}
+
+// SaveGame writes the record (30-day TTL) and indexes it in the global
+// recent list and each human seat's list — sorted sets scored by end time,
+// trimmed to the newest MaxRecentGames / MaxPlayerGames in the same
+// transaction.
+func (s *RedisStore) SaveGame(g GameRecord) {
+	data, err := json.Marshal(g)
+	if err != nil {
+		slog.Warn("store: marshal game", "err", err)
+		return
+	}
+	ctx, cancel := s.op()
+	defer cancel()
+	z := redis.Z{Score: float64(g.EndedAt), Member: g.ID}
+	pipe := s.rdb.TxPipeline()
+	pipe.Set(ctx, s.gameKey(g.ID), data, gameTTL)
+	pipe.ZAdd(ctx, recentGamesKey, z)
+	pipe.ZRemRangeByRank(ctx, recentGamesKey, 0, -MaxRecentGames-1)
+	for _, seat := range []SeatRecord{g.Black, g.White} {
+		if seat.IsAI || seat.PlayerID == "" {
+			continue
+		}
+		k := s.playerGamesKey(seat.PlayerID)
+		pipe.ZAdd(ctx, k, z)
+		pipe.ZRemRangeByRank(ctx, k, 0, -MaxPlayerGames-1)
+		pipe.Expire(ctx, k, gameTTL)
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		slog.Warn("store: redis save game", "err", err)
+	}
+}
+
+func (s *RedisStore) GameByID(id string) (GameRecord, bool) {
+	ctx, cancel := s.op()
+	defer cancel()
+	data, err := s.rdb.Get(ctx, s.gameKey(id)).Bytes()
+	if err != nil {
+		if !errors.Is(err, redis.Nil) {
+			slog.Warn("store: redis get game", "err", err)
+		}
+		return GameRecord{}, false
+	}
+	var g GameRecord
+	if err := json.Unmarshal(data, &g); err != nil {
+		slog.Warn("store: unmarshal game", "err", err)
+		return GameRecord{}, false
+	}
+	return g, true
+}
+
+func (s *RedisStore) RecentGames(limit int) []GameRecord {
+	return s.gamesIn(recentGamesKey, limit)
+}
+
+func (s *RedisStore) PlayerGames(playerID string, limit int) []GameRecord {
+	return s.gamesIn(s.playerGamesKey(playerID), limit)
+}
+
+// gamesIn reads the newest limit ids of an index and their records in one
+// pipeline; ids whose record expired are skipped.
+func (s *RedisStore) gamesIn(index string, limit int) []GameRecord {
+	if limit <= 0 {
+		return nil
+	}
+	ctx, cancel := s.op()
+	defer cancel()
+	ids, err := s.rdb.ZRangeArgs(ctx, redis.ZRangeArgs{Key: index, Start: 0, Stop: limit - 1, Rev: true}).Result()
+	if err != nil {
+		slog.Warn("store: redis list games", "err", err)
+		return nil
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	pipe := s.rdb.Pipeline()
+	cmds := make([]*redis.StringCmd, len(ids))
+	for i, id := range ids {
+		cmds[i] = pipe.Get(ctx, s.gameKey(id))
+	}
+	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
+		slog.Warn("store: redis list games", "err", err)
+	}
+	out := make([]GameRecord, 0, len(ids))
+	for _, c := range cmds {
+		data, err := c.Bytes()
+		if err != nil {
+			continue
+		}
+		var g GameRecord
+		if json.Unmarshal(data, &g) == nil {
+			out = append(out, g)
 		}
 	}
 	return out

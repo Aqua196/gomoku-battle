@@ -21,6 +21,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
   const nickRef = useRef(state.session.nick)
   nickRef.current = state.session.nick
+  // The room being watched, for re-attaching after a reconnect: the server
+  // drops spectators whose socket closes (§11).
+  const watchingRef = useRef<string | null>(null)
+  watchingRef.current = state.game.spectating ? (state.game.game?.roomId ?? null) : null
 
   const connect = useCallback((nick?: string) => {
     const n = (nick ?? nickRef.current).trim().slice(0, 32)
@@ -43,6 +47,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           // game — arm the watchdog to clear any stale board otherwise.
           if (m.resumed) resumeWatchdogRef.current?.arm()
           else resumeWatchdogRef.current?.cancel()
+          const watching = watchingRef.current
+          if (m.resumed && watching) {
+            // Re-attach before the store sees welcome; spectate_start then
+            // refreshes the board (and cancels the watchdog like game_state).
+            queueMicrotask(() => clientRef.current?.send({ type: 'spectate', roomId: watching }))
+          }
+        }
+        if (m.type === 'spectate_start') {
+          resumeWatchdogRef.current?.cancel()
         }
         if (m.type === 'game_state' || m.type === 'game_over') {
           resumeWatchdogRef.current?.cancel()
@@ -103,6 +116,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         send({ type: 'play_ai', difficulty, ...(color && color !== 'black' ? { color } : {}) }),
       move: (x, y) => send({ type: 'move', x, y }),
       resign: () => send({ type: 'resign' }),
+      spectate: (roomId) => send({ type: 'spectate', roomId }),
+      stopSpectating: () => send({ type: 'spectate_stop' }),
       dismissError: () => dispatch({ type: 'DISMISS_ERROR' }),
       clearGame: () => dispatch({ type: 'CLEAR_GAME' }),
     }

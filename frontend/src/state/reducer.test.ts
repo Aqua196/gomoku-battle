@@ -308,3 +308,51 @@ describe('store reducer', () => {
     expect(deriveYouColor(game(), null)).toBeNull()
   })
 })
+
+describe('spectating (§11)', () => {
+  const watched = () =>
+    game({
+      roomId: 'r_w',
+      players: {
+        black: { playerId: 'p_a', nick: 'a', connected: true, isAI: false },
+        white: { playerId: 'p_b', nick: 'b', connected: true, isAI: false },
+      },
+    })
+
+  it('spectate_start shows the game without a seat', () => {
+    const s = srv(welcomed(), { type: 'spectate_start', game: watched() })
+    expect(s.game.spectating).toBe(true)
+    expect(s.game.game?.roomId).toBe('r_w')
+    expect(s.game.youColor).toBeNull()
+  })
+
+  it('game_state and game_over keep the viewer seatless', () => {
+    let s = srv(welcomed(), { type: 'spectate_start', game: watched() })
+    s = srv(s, { type: 'game_state', game: watched() })
+    expect(s.game.youColor).toBeNull()
+    s = srv(s, {
+      type: 'game_over',
+      reason: 'five',
+      winner: 'white',
+      game: { ...watched(), status: 'finished', winner: 'white', winReason: 'five' },
+    })
+    expect(s.game.over).toEqual({ reason: 'five', winner: 'white' })
+    expect(s.game.spectating).toBe(true)
+    expect(s.game.youColor).toBeNull()
+  })
+
+  it('spectate_end clears only the watched board', () => {
+    const s = srv(welcomed(), { type: 'spectate_start', game: watched() })
+    expect(srv(s, { type: 'spectate_end', roomId: 'r_other' })).toBe(s)
+    const ended = srv(s, { type: 'spectate_end', roomId: 'r_w' })
+    expect(ended.game.game).toBeNull()
+    expect(ended.game.spectating).toBe(false)
+  })
+
+  it('a stale spectate_end cannot clear our own new game', () => {
+    let s = srv(welcomed(), { type: 'spectate_start', game: watched() })
+    s = srv(s, { type: 'game_start', game: game(), youColor: 'black' })
+    expect(s.game.spectating).toBe(false)
+    expect(srv(s, { type: 'spectate_end', roomId: 'r_w' })).toBe(s)
+  })
+})

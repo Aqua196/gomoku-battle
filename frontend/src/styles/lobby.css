@@ -405,7 +405,7 @@
 
 .room-row {
   display: grid;
-  grid-template-columns: 44px minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1.2fr) 80px 84px;
+  grid-template-columns: 44px minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1.2fr) 84px 96px;
   align-items: center;
   gap: 14px;
   min-height: 60px;
@@ -480,9 +480,158 @@
   color: var(--ink-3);
 }
 
+.rr-viewers {
+  display: block;
+  color: var(--ink-3);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+}
+
 .rr-action {
   display: flex;
   justify-content: flex-end;
+}
+
+/* ── Records (棋谱) ──────────────────────────────────────────────── */
+
+.seg {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  align-self: center;
+}
+
+.seg-opt {
+  position: relative;
+  padding: 4px 10px 6px;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  cursor: pointer;
+  transition: color 0.3s var(--ease);
+}
+
+.seg-opt::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  bottom: 0;
+  left: 10px;
+  height: 2px;
+  background: var(--seal);
+  transform: scaleX(0);
+  transition: transform 0.45s var(--ease-out);
+}
+
+.seg-opt:hover,
+.seg-opt.on {
+  color: var(--ink);
+}
+
+.seg-opt.on::after {
+  transform: none;
+}
+
+.seg-opt:focus-visible {
+  outline: 1px solid var(--ink);
+}
+
+.records-note {
+  padding: 28px 0;
+  color: var(--ink-3);
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  text-align: center;
+}
+
+.record-list {
+  padding: 0;
+  list-style: none;
+}
+
+.record-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) 110px 60px 28px;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 50px;
+  padding: 0 8px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--ink);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  animation: reveal 0.8s var(--ease-out) backwards;
+  transition:
+    background 0.4s,
+    padding 0.4s var(--ease-out);
+}
+
+.record-row:hover,
+.record-row:focus-visible {
+  padding-left: 16px;
+  background: linear-gradient(90deg, rgb(var(--scape-ink) / 0.06), transparent 80%);
+  outline: none;
+}
+
+.rec-when,
+.rec-moves {
+  color: var(--ink-3);
+  font-size: 15px;
+}
+
+.rec-moves {
+  text-align: right;
+}
+
+.rec-players {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rec-players span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rec-players span.won {
+  font-weight: 700;
+}
+
+.rec-players i {
+  flex: none;
+  color: var(--ink-4);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.rec-verdict {
+  color: var(--ink-2);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+}
+
+.rec-mine {
+  justify-self: end;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.rec-mine.win {
+  color: var(--seal);
+}
+
+.rec-mine.lose,
+.rec-mine.draw {
+  color: var(--ink-3);
 }
 
 .empty {
@@ -563,5 +712,29 @@
   }
   .rr-action {
     grid-area: action;
+  }
+  .record-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'players verdict mine'
+      'when moves mine';
+    row-gap: 2px;
+    padding: 10px 4px;
+  }
+  .rec-players {
+    grid-area: players;
+  }
+  .rec-verdict {
+    grid-area: verdict;
+    text-align: right;
+  }
+  .rec-when {
+    grid-area: when;
+  }
+  .rec-moves {
+    grid-area: moves;
+  }
+  .rec-mine {
+    grid-area: mine;
   }
 }

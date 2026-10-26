@@ -58,6 +58,8 @@ function GameView({ game }: { game: GameState }) {
   const [reviewing, setReviewing] = useState(false)
 
   const youColor = gv.youColor
+  const spectating = gv.spectating
+  const viewers = game.spectators ?? 0
   const oppColor: Color | null = youColor ? (youColor === 'black' ? 'white' : 'black') : null
   const opp = oppColor ? game.players[oppColor] : null
   const oppOnline = gv.opponentConnected && (opp?.connected ?? true)
@@ -77,7 +79,13 @@ function GameView({ game }: { game: GameState }) {
   const showReconnected = gv.opponentReconnectedAt !== null && localNow - gv.opponentReconnectedAt < 3000
 
   const winLine = over?.reason === 'five' ? findWinLine(game.board, game.lastMove) : null
-  const outcome = over ? (over.winner === null ? 'draw' : over.winner === youColor ? 'win' : 'lose') : null
+  const outcome = over
+    ? over.winner === null
+      ? 'draw'
+      : spectating || over.winner === youColor
+        ? 'win'
+        : 'lose'
+    : null
 
   /* ── sound cues ─────────────────────────────────────────────────── */
   const prevMoves = useRef(game.moveNumber)
@@ -111,9 +119,13 @@ function GameView({ game }: { game: GameState }) {
 
   /* ── actions ────────────────────────────────────────────────────── */
   const backToLobby = () => {
+    if (spectating && playing) api.stopSpectating()
     api.clearGame()
     navigate('/')
   }
+  // The finished game stays in the store (the redirector only pulls live
+  // games back to /game); clearing it here would race the navigation.
+  const openReplay = () => navigate(`/replay/${game.roomId}`)
   const difficulty = aiDifficulty(aiOpp)
   const again = difficulty
     ? {
@@ -159,6 +171,7 @@ function GameView({ game }: { game: GameState }) {
 
   const turnState = over || !playing ? 'over' : myTurn ? 'mine' : aiThinking ? 'ai' : 'wait'
   const TURN_LATIN = { over: 'the game is decided', mine: 'your move', ai: 'the machine is reading', wait: 'their move' }
+  const waitText = spectating ? `${game.turn === 'black' ? '黑方' : '白方'}落子中` : '对手思考中'
 
   return (
     <div className={`app-shell${myTurn ? ' my-turn' : ''}${over && !reviewing ? ' show-result' : ''}`}>
@@ -209,12 +222,18 @@ function GameView({ game }: { game: GameState }) {
             <div>
               <p className="kicker">
                 <span>No.03</span>
-                <span className="latin">the game</span>
+                <span className="latin">{spectating ? 'watching' : 'the game'}</span>
               </p>
-              <h1 className="serif">对局</h1>
+              <h1 className="serif">{spectating ? '观战' : '对局'}</h1>
             </div>
             <div className="side-meta">
               {aiBadge && <em className="tag ai">{aiBadge}</em>}
+              {viewers > 0 && (
+                <span className="side-viewers serif" title="观战人数">
+                  <Icon name="eye" size={14} />
+                  <Roll value={viewers} /> 人观战
+                </span>
+              )}
               <span className="side-moves serif">
                 第{' '}
                 <b className="latin">
@@ -235,9 +254,11 @@ function GameView({ game }: { game: GameState }) {
             ) : turnState === 'ai' ? (
               <span className="turn-text">AI 思考中</span>
             ) : (
-              <span className="turn-text">对手思考中</span>
+              <span className="turn-text">{waitText}</span>
             )}
-            <span className="turn-latin latin">{TURN_LATIN[turnState]}</span>
+            <span className="turn-latin latin">
+              {spectating && turnState === 'wait' ? `${game.turn} to move` : TURN_LATIN[turnState]}
+            </span>
             {turnState === 'mine' && (
               <svg className="turn-brush" viewBox="0 0 120 10" preserveAspectRatio="none" aria-hidden>
                 <path d="M2,6 C30,2 60,8 90,4 S116,5 118,5" pathLength={1} />
@@ -264,7 +285,13 @@ function GameView({ game }: { game: GameState }) {
               <Icon name="hash" size={15} />
               <span>手数</span>
             </button>
-            {playing && (
+            {spectating && playing && (
+              <button type="button" className="btn sm" onClick={backToLobby}>
+                <Icon name="eye" size={15} />
+                <span>退出观战</span>
+              </button>
+            )}
+            {playing && !spectating && (
               <button
                 type="button"
                 className={`btn sm${confirmResign ? ' danger' : ''}`}
@@ -282,7 +309,7 @@ function GameView({ game }: { game: GameState }) {
               </button>
             )}
           </div>
-          <p className="side-hint serif">方向键移动 · 回车落子 · 触屏点两下确认</p>
+          {!spectating && <p className="side-hint serif">方向键移动 · 回车落子 · 触屏点两下确认</p>}
         </aside>
       </main>
 
@@ -291,22 +318,29 @@ function GameView({ game }: { game: GameState }) {
           reason={over.reason}
           winner={over.winner}
           youColor={youColor}
+          spectating={spectating}
           moves={game.moveNumber}
           delayed={winLine !== null}
-          again={again}
+          again={spectating ? null : again}
           onBack={backToLobby}
           onReview={() => setReviewing(true)}
+          onReplay={openReplay}
         />
       )}
       {over && reviewing && (
         <div className="review-bar">
-          <span className="review-label serif">终局复盘 · 共 {game.moveNumber} 手</span>
+          <span className="review-label serif">终局 · 共 {game.moveNumber} 手</span>
           <button type="button" className="btn sm" onClick={() => setReviewing(false)}>
             <span>结算</span>
           </button>
-          <button type="button" className="btn sm" onClick={again.run}>
-            <span>{again.label}</span>
+          <button type="button" className="btn sm" onClick={openReplay}>
+            <span>逐手复盘</span>
           </button>
+          {!spectating && (
+            <button type="button" className="btn sm" onClick={again.run}>
+              <span>{again.label}</span>
+            </button>
+          )}
           <button type="button" className="btn sm primary" onClick={backToLobby}>
             <span>返回大厅</span>
           </button>

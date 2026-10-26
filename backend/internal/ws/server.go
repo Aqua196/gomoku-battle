@@ -86,6 +86,9 @@ func (s *Server) Handler(staticDir string, enablePprof bool) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(protocol.Marshal(s.hub.Metrics()))
 	})
+	mux.HandleFunc("GET /api/games", s.handleRecentGames)
+	mux.HandleFunc("GET /api/games/{id}", s.handleGame)
+	mux.HandleFunc("GET /api/players/{id}/games", s.handlePlayerGames)
 	if enablePprof {
 		mux.HandleFunc("/debug/pprof/", pprof.Index)
 		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
@@ -325,6 +328,14 @@ func (sess *session) dispatch(data []byte) {
 		h.PlayAI(p, in.Difficulty, in.Color)
 	case protocol.TResign:
 		h.Resign(p)
+	case protocol.TSpectate:
+		if in.RoomID == "" {
+			sess.sendErr(protocol.EBadRequest, "roomId required")
+			return
+		}
+		h.Spectate(p, in.RoomID)
+	case protocol.TSpectateStop:
+		h.StopSpectating(p)
 	case protocol.TMove:
 		if in.X == nil || in.Y == nil {
 			sess.sendErr(protocol.EBadRequest, "move requires integer x and y")

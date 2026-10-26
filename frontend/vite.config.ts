@@ -11,6 +11,7 @@ export default defineConfig({
       '/ws': { target: 'http://localhost:8080', ws: true },
       '/healthz': { target: 'http://localhost:8080' },
       '/metrics': { target: 'http://localhost:8080' },
+      '/api': { target: 'http://localhost:8080' },
     },
   },
   test: {

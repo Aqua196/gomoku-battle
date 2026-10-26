@@ -145,6 +145,16 @@
   gap: 8px;
 }
 
+.side-viewers {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-3);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+}
+
 .side-moves {
   color: var(--ink-2);
   font-size: 14px;

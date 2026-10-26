@@ -31,6 +31,7 @@ func (h *Hub) PlayerDisconnected(p *Player, c Conn) {
 	p.conn = nil
 	p.disconnectedAt = time.Now()
 	h.dequeueLocked(p)
+	watch := h.unwatchLocked(p)
 	slog.Info("player disconnected", "playerId", p.ID(), "roomId", p.roomID)
 	switch p.state {
 	case StateWaiting:
@@ -52,8 +53,13 @@ func (h *Hub) PlayerDisconnected(p *Player, c Conn) {
 	if actor != nil {
 		actor.Disconnect(p.ID())
 	}
+	if watch.actor != nil {
+		watch.actor.Unwatch(p.ID()) // no spectate_end: the socket is gone
+	}
 	if deletedRoomID != "" {
 		h.syncRoomStore(deletedRoomID)
+	}
+	if deletedRoomID != "" || watch.roomID != "" {
 		h.broadcastRoomList()
 	}
 }
@@ -178,6 +184,7 @@ func (h *Hub) CreateRoom(p *Player, name string) {
 		return
 	}
 	dequeued := h.dequeueLocked(p)
+	watch := h.unwatchLocked(p)
 	id := randID("r", 8)
 	e = &roomEntry{meta: store.RoomRecord{
 		ID:        id,
@@ -196,6 +203,7 @@ func (h *Hub) CreateRoom(p *Player, name string) {
 	if dequeued {
 		h.reply(p, protocol.NewMatchmaking(protocol.MatchCancelled, 0))
 	}
+	watch.finish(h, p)
 	h.reply(p, protocol.NewRoomAction(protocol.RoomCreated, &room))
 	h.broadcastRoomList()
 }
@@ -222,6 +230,7 @@ func (h *Hub) JoinRoom(p *Player, roomID string) {
 		return
 	}
 	dequeued := h.dequeueLocked(p)
+	watch := h.unwatchLocked(p)
 	e.seats[1] = p
 	p.roomID = roomID
 	actor = h.startGameLocked(e)
@@ -233,6 +242,7 @@ func (h *Hub) JoinRoom(p *Player, roomID string) {
 	if dequeued {
 		h.reply(p, protocol.NewMatchmaking(protocol.MatchCancelled, 0))
 	}
+	watch.finish(h, p)
 	for _, s := range e.seats {
 		if s != nil {
 			h.reply(s, protocol.NewRoomAction(protocol.RoomJoined, &room))
@@ -285,6 +295,8 @@ func (h *Hub) ListRooms(p *Player) {
 func (h *Hub) Matchmake(p *Player) {
 	var actor *game.Actor
 	var pairedRoomID string
+	var paired [2]*Player
+	var watches [2]watchExit
 	position := 0
 	h.mu.Lock()
 	if p.roomID != "" {
@@ -302,6 +314,8 @@ func (h *Hub) Matchmake(p *Player) {
 		a, b := h.queue[0], h.queue[1]
 		h.queue = h.queue[2:]
 		a.queued, b.queued = false, false
+		paired = [2]*Player{a, b}
+		watches = [2]watchExit{h.unwatchLocked(a), h.unwatchLocked(b)}
 		e := h.newRoomLocked(a.Nick()+"'s room", false)
 		e.seats[0], e.seats[1] = a, b
 		a.roomID, b.roomID = e.meta.ID, e.meta.ID
@@ -314,6 +328,9 @@ func (h *Hub) Matchmake(p *Player) {
 	if actor != nil {
 		// Paired: persist room outside h.mu, then broadcast and start actor.
 		h.syncRoomStore(pairedRoomID)
+		for i, w := range watches {
+			w.finish(h, paired[i])
+		}
 		h.broadcastRoomList()
 		actor.Start()
 		return
@@ -364,6 +381,7 @@ func (h *Hub) PlayAI(p *Player, difficulty, color string) {
 		return
 	}
 	dequeued := h.dequeueLocked(p)
+	watch := h.unwatchLocked(p)
 	e := h.newRoomLocked(p.Nick()+" vs AI ("+difficulty+")", true)
 	bot := &Player{
 		rec:  &store.PlayerRecord{PlayerID: randID("ai", 8), Nick: "AI (" + difficulty + ")"},
@@ -384,8 +402,62 @@ func (h *Hub) PlayAI(p *Player, difficulty, color string) {
 	if dequeued {
 		h.reply(p, protocol.NewMatchmaking(protocol.MatchCancelled, 0))
 	}
+	watch.finish(h, p)
 	h.broadcastRoomList()
 	actor.Start()
+}
+
+// Spectate attaches the caller to a playing room as a viewer (PROTOCOL
+// §11): spectate_start with the live game, then every broadcast of that
+// game. Watching another room first leaves it; seated players cannot watch.
+func (h *Hub) Spectate(p *Player, roomID string) {
+	h.mu.Lock()
+	if p.roomID != "" {
+		h.mu.Unlock()
+		h.replyErr(p, protocol.EAlreadyInRoom, "leave your current room first")
+		return
+	}
+	e := h.rooms[roomID]
+	if e == nil {
+		h.mu.Unlock()
+		h.replyErr(p, protocol.ERoomNotFound, "room not found")
+		return
+	}
+	if e.meta.Status != protocol.RoomPlaying || e.actor == nil {
+		h.mu.Unlock()
+		h.replyErr(p, protocol.ERoomNotPlaying, "only a playing room can be watched")
+		return
+	}
+	var prev watchExit
+	if p.watching != roomID {
+		prev = h.unwatchLocked(p)
+	}
+	if e.watchers == nil {
+		e.watchers = make(map[*Player]struct{})
+	}
+	e.watchers[p] = struct{}{}
+	p.watching = roomID
+	actor := e.actor
+	h.mu.Unlock()
+
+	if prev.actor != nil {
+		prev.actor.Unwatch(p.ID()) // switching rooms: spectate_start below supersedes
+	}
+	actor.Watch(p.ID())
+	h.broadcastRoomList()
+}
+
+// StopSpectating detaches the caller; idempotent (always answers
+// spectate_end).
+func (h *Hub) StopSpectating(p *Player) {
+	h.mu.Lock()
+	watch := h.unwatchLocked(p)
+	h.mu.Unlock()
+	if !watch.finish(h, p) {
+		h.reply(p, &protocol.SpectateEndMsg{Type: protocol.TSpectateEnd})
+		return
+	}
+	h.broadcastRoomList()
 }
 
 // Resign forfeits the caller's live game.
@@ -464,26 +536,54 @@ func (h *Hub) startGameLocked(e *roomEntry) *game.Actor {
 	return e.actor
 }
 
-// gameOver is the actor's OverFunc: delete the room, return both players to
-// the lobby and push the refreshed room_list.
-func (h *Hub) gameOver(roomID string) {
+// gameOver is the actor's OverFunc: delete the room, return both players
+// (and any spectators) to the lobby, record the game for replay and push
+// the refreshed room_list. Spectators already received game_over.
+func (h *Hub) gameOver(roomID string, res game.Result) {
 	h.mu.Lock()
 	e := h.rooms[roomID]
 	if e == nil {
 		h.mu.Unlock()
 		return
 	}
-	slog.Info("game over", "roomId", roomID, "players", len(e.seats))
+	slog.Info("game over", "roomId", roomID, "reason", res.Reason, "moves", len(res.Moves))
 	for _, p := range e.seats {
 		if p != nil {
 			p.state = StateLobby
 			p.roomID = ""
 		}
 	}
+	for w := range e.watchers {
+		w.watching = ""
+	}
 	delete(h.rooms, roomID)
 	h.gamesPlayed.Add(1)
 	h.mu.Unlock()
 
+	if res.Reason != "" {
+		h.store.SaveGame(recordOf(roomID, res))
+	}
 	h.syncRoomStore(roomID)
 	h.broadcastRoomList()
+}
+
+// recordOf converts the actor's report into the stored game record.
+func recordOf(roomID string, res game.Result) store.GameRecord {
+	seat := func(s game.Seat) store.SeatRecord {
+		return store.SeatRecord{PlayerID: s.PlayerID, Nick: s.Nick, IsAI: s.IsAI}
+	}
+	moves := make([][2]int, len(res.Moves))
+	for i, m := range res.Moves {
+		moves[i] = [2]int{m.X, m.Y}
+	}
+	return store.GameRecord{
+		ID:        roomID,
+		Black:     seat(res.Black),
+		White:     seat(res.White),
+		Moves:     moves,
+		Winner:    res.Winner.Name(),
+		Reason:    res.Reason,
+		StartedAt: res.StartedAt.UnixMilli(),
+		EndedAt:   res.EndedAt.UnixMilli(),
+	}
 }

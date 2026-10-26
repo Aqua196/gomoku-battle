@@ -186,8 +186,9 @@
   margin-bottom: 14px;
 }
 
-.scroll-paper .link-btn {
+.scroll-links {
   display: flex;
-  width: max-content;
-  margin: 0 auto;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 22px;
 }

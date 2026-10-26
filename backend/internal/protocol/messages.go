@@ -54,6 +54,8 @@ type Room struct {
 	Players   []RoomPlayer `json:"players"`
 	IsAI      bool         `json:"isAI"`
 	CreatedAt int64        `json:"createdAt"`
+	// Spectators counts viewers of a playing room (PROTOCOL §11).
+	Spectators int `json:"spectators"`
 }
 
 // RoomMsg carries room lifecycle events (created/joined/left).
@@ -125,6 +127,10 @@ type GameState struct {
 	Winner            *string     `json:"winner"`
 	WinReason         *string     `json:"winReason"`
 	ServerNow         int64       `json:"serverNow"`
+	// Moves lists every stone in play order; Moves[len-1] == LastMove.
+	Moves []Pos `json:"moves"`
+	// Spectators counts current viewers (PROTOCOL §11).
+	Spectators int `json:"spectators"`
 }
 
 // GameStartMsg opens a game; YouColor is personalized per recipient.
@@ -154,6 +160,44 @@ type OpponentPresenceMsg struct {
 	Type      string `json:"type"`
 	Connected bool   `json:"connected"`
 	Deadline  *int64 `json:"deadline"`
+}
+
+// SpectateStartMsg answers spectate with the live game; game_state and
+// game_over broadcasts follow until spectate_end.
+type SpectateStartMsg struct {
+	Type string     `json:"type"`
+	Game *GameState `json:"game"`
+}
+
+// SpectateEndMsg confirms spectate_stop (or a switch into one's own game).
+type SpectateEndMsg struct {
+	Type   string `json:"type"`
+	RoomID string `json:"roomId"`
+}
+
+// RecordSeat is one side of a recorded game (HTTP /api, PROTOCOL §12).
+type RecordSeat struct {
+	PlayerID string `json:"playerId"`
+	Nick     string `json:"nick"`
+	IsAI     bool   `json:"isAI"`
+}
+
+// GameRecord is a finished game for replay. Lists omit Moves.
+type GameRecord struct {
+	ID        string     `json:"id"`
+	Black     RecordSeat `json:"black"`
+	White     RecordSeat `json:"white"`
+	Winner    *string    `json:"winner"`
+	Reason    string     `json:"reason"`
+	MoveCount int        `json:"moveCount"`
+	Moves     []Pos      `json:"moves,omitempty"`
+	StartedAt int64      `json:"startedAt"`
+	EndedAt   int64      `json:"endedAt"`
+}
+
+// GameList is the body of the record listing endpoints.
+type GameList struct {
+	Games []GameRecord `json:"games"`
 }
 
 // StrPtr returns a pointer to s (for nullable color fields).

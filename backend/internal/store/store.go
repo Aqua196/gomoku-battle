@@ -22,7 +22,35 @@ type RoomRecord struct {
 	CreatedAt int64
 }
 
-// Store is the persistence contract for M1.
+// SeatRecord is one side of a recorded game.
+type SeatRecord struct {
+	PlayerID string `json:"playerId"`
+	Nick     string `json:"nick"`
+	IsAI     bool   `json:"isAI"`
+}
+
+// GameRecord is a finished game kept for replay: both seats, every move in
+// order as {x, y}, and the verdict. Winner is "black", "white" or "" (draw
+// or abandoned).
+type GameRecord struct {
+	ID        string     `json:"id"`
+	Black     SeatRecord `json:"black"`
+	White     SeatRecord `json:"white"`
+	Moves     [][2]int   `json:"moves"`
+	Winner    string     `json:"winner"`
+	Reason    string     `json:"reason"`
+	StartedAt int64      `json:"startedAt"`
+	EndedAt   int64      `json:"endedAt"`
+}
+
+// Retention for game records: the newest MaxRecentGames overall and the
+// newest MaxPlayerGames per player stay listed.
+const (
+	MaxRecentGames = 200
+	MaxPlayerGames = 50
+)
+
+// Store is the persistence contract.
 type Store interface {
 	// CreatePlayer registers a new session with a fresh id and token.
 	CreatePlayer(nick string) *PlayerRecord
@@ -43,4 +71,13 @@ type Store interface {
 	DeleteRoom(id string)
 	// ListRooms returns all room records (any status).
 	ListRooms() []RoomRecord
+
+	// SaveGame stores a finished game and indexes it under both seats.
+	SaveGame(g GameRecord)
+	// GameByID fetches one recorded game, moves included.
+	GameByID(id string) (GameRecord, bool)
+	// RecentGames lists up to limit games, newest first.
+	RecentGames(limit int) []GameRecord
+	// PlayerGames lists up to limit games of one player, newest first.
+	PlayerGames(playerID string, limit int) []GameRecord
 }

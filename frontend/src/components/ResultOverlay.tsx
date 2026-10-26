@@ -11,13 +11,16 @@ const REASON_LABEL: Record<GameOverReason, string> = {
   abandoned: '双方断线超时',
 }
 
-type Outcome = 'win' | 'lose' | 'draw' | 'abandoned'
+type Outcome = 'win' | 'lose' | 'draw' | 'abandoned' | 'black' | 'white'
 
 const COPY: Record<Outcome, { title: string; glyph: string; seal: string; latin: string }> = {
   win: { title: '你赢了！', glyph: '胜', seal: '大吉', latin: 'a game well won' },
   lose: { title: '对手获胜', glyph: '负', seal: '再战', latin: 'the stones fell against you' },
   draw: { title: '平局', glyph: '和', seal: '和局', latin: 'neither side yields' },
   abandoned: { title: '双方弃局', glyph: '弃', seal: '空局', latin: 'the table was left empty' },
+  // A spectator's verdict names the colour, not "you".
+  black: { title: '黑方胜', glyph: '胜', seal: '终局', latin: 'black takes the game' },
+  white: { title: '白方胜', glyph: '胜', seal: '终局', latin: 'white takes the game' },
 }
 
 /** End-of-game verdict: a hanging scroll that unrolls from its centre. */
@@ -25,29 +28,43 @@ export function ResultOverlay({
   reason,
   winner,
   youColor,
+  spectating = false,
   moves,
   delayed,
   again,
   onBack,
   onReview,
+  onReplay,
 }: {
   reason: GameOverReason
   winner: Color | null
   youColor: Color | null
+  /** watched, not played: name the winning colour instead of "you" */
+  spectating?: boolean
   moves: number
   /** hold the scroll back so the winning stroke can draw first */
   delayed: boolean
   again: { label: string; run: () => void } | null
   onBack: () => void
   onReview: () => void
+  /** open the move-by-move replay of this game */
+  onReplay?: () => void
 }) {
   const outcome: Outcome =
-    winner === null ? (reason === 'abandoned' ? 'abandoned' : 'draw') : winner === youColor ? 'win' : 'lose'
+    winner === null
+      ? reason === 'abandoned'
+        ? 'abandoned'
+        : 'draw'
+      : spectating
+        ? winner
+        : winner === youColor
+          ? 'win'
+          : 'lose'
   const copy = COPY[outcome]
 
   return (
     <div
-      className={`overlay result ${outcome}${delayed ? ' delayed' : ''}`}
+      className={`overlay result ${outcome === 'black' || outcome === 'white' ? 'win' : outcome}${delayed ? ' delayed' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="result-title"
@@ -76,7 +93,7 @@ export function ResultOverlay({
             </div>
             <div>
               <dt>执子</dt>
-              <dd className="serif">{youColor === 'white' ? '白' : '黑'}</dd>
+              <dd className="serif">{spectating ? '观战' : youColor === 'white' ? '白' : '黑'}</dd>
             </div>
           </dl>
           <div className="scroll-actions">
@@ -94,10 +111,18 @@ export function ResultOverlay({
               <small aria-hidden>lobby</small>
             </button>
           </div>
-          <button type="button" className="link-btn" onClick={onReview}>
-            <Icon name="eye" size={15} />
-            查看终局棋盘
-          </button>
+          <div className="scroll-links">
+            <button type="button" className="link-btn" onClick={onReview}>
+              <Icon name="eye" size={15} />
+              查看终局棋盘
+            </button>
+            {onReplay && (
+              <button type="button" className="link-btn" onClick={onReplay}>
+                <Icon name="replay" size={15} />
+                逐手复盘
+              </button>
+            )}
+          </div>
         </div>
         <i className="rod bottom" aria-hidden />
       </div>

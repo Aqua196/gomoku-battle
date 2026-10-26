@@ -165,6 +165,9 @@ func TestAITimeLimit(t *testing.T) {
 // AI plays white (its production seat); the bench uses a 12ms budget so the
 // suite stays fast — the engine still plays wins/blocks instantly.
 func TestAIvsRandom100(t *testing.T) {
+	if raceOn {
+		t.Skip("100 timed games; single goroutine, nothing for -race to find")
+	}
 	cfg := For("hard")
 	cfg.Think = 12 * time.Millisecond
 	eng := NewEngine(cfg)

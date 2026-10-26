@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { BrowserRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Game } from './pages/Game'
 import { Lobby } from './pages/Lobby'
+import { Replay } from './pages/Replay'
 import { StoreProvider } from './state/store'
 import { useStore } from './state/useStore'
 
@@ -12,6 +13,7 @@ const ERROR_LABEL: Record<string, string> = {
   already_in_room: '你已在房间中',
   not_in_room: '你不在房间中',
   room_full: '房间已满',
+  room_not_playing: '这一局还没开始，暂不能观战',
   room_not_found: '房间不存在',
   not_in_lobby: '当前不在大厅',
   game_over: '对局已结束',
@@ -29,11 +31,14 @@ function Redirector() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const inGame = state.game.game !== null
+  // Only a game still being played pulls the viewer to the board; a
+  // finished one may be left for its replay (/replay/:id) or the lobby.
+  const live = inGame && state.game.over === null
 
   useEffect(() => {
-    // game_start (or resumed game_state) → jump to the board.
-    if (inGame && pathname !== '/game') navigate('/game')
-  }, [inGame, pathname, navigate])
+    // game_start (or resumed game_state / spectate_start) → jump to the board.
+    if (live && pathname !== '/game') navigate('/game')
+  }, [live, pathname, navigate])
 
   useEffect(() => {
     // No active game (cleared via 返回大厅) → leave /game.
@@ -82,6 +87,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Lobby />} />
             <Route path="/game" element={<Game />} />
+            <Route path="/replay/:id" element={<Replay />} />
             <Route path="*" element={<Lobby />} />
           </Routes>
           <Redirector />

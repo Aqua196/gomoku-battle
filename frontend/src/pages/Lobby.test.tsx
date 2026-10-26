@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react'
+import type { ReactElement } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setPref } from '../lib/prefs'
 import type { AppState } from '../state/reducer'
 import type { StoreApi } from '../state/useStore'
-import type { Room } from '../ws/protocol'
+import type { GameRecord, Room } from '../ws/protocol'
 
 const storeMock = vi.hoisted(() => {
   const state: { current: AppState | null } = { current: null }
@@ -25,6 +27,15 @@ vi.mock('../state/useStore', () => ({
 
 import { Lobby } from './Lobby'
 
+// The lobby reads records over HTTP and navigates to replays.
+const render = (ui: ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>)
+const fetchMock = vi.fn()
+vi.stubGlobal('fetch', fetchMock)
+
+function respond(games: GameRecord[]) {
+  fetchMock.mockImplementation(async () => new Response(JSON.stringify({ games }), { status: 200 }))
+}
+
 function lobbyState(over: Partial<AppState['lobby']> = {}): AppState {
   return {
     session: {
@@ -43,6 +54,7 @@ function lobbyState(over: Partial<AppState['lobby']> = {}): AppState {
       opponentDeadline: null,
       opponentReconnectedAt: null,
       over: null,
+      spectating: false,
     },
     error: null,
   }
@@ -55,6 +67,7 @@ describe('<Lobby> 人机对战入口', () => {
     storeMock.api.playAi = vi.fn()
     storeMock.api.listRooms = vi.fn()
     setPref('aiSide', 'black')
+    respond([])
   })
 
   afterEach(() => cleanup())
@@ -104,5 +117,62 @@ describe('<Lobby> 人机对战入口', () => {
     for (const label of ['简单', '普通', '困难']) {
       expect(screen.getByRole('button', { name: label })).toBeDisabled()
     }
+  })
+})
+
+describe('<Lobby> 观战与棋谱', () => {
+  const record: GameRecord = {
+    id: 'r_done',
+    black: { playerId: 'p_me', nick: '执黑者', isAI: false },
+    white: { playerId: 'ai_1', nick: 'AI (hard)', isAI: true },
+    winner: 'white',
+    reason: 'five',
+    moveCount: 41,
+    startedAt: 1_700_000_000_000,
+    endedAt: 1_700_000_300_000,
+  }
+
+  beforeEach(() => {
+    storeMock.state.current = lobbyState({
+      rooms: [
+        {
+          id: 'r_live',
+          name: '对弈中',
+          status: 'playing',
+          players: [
+            { playerId: 'p_a', nick: 'a', color: 'black', connected: true },
+            { playerId: 'p_b', nick: 'b', color: 'white', connected: true },
+          ],
+          isAI: false,
+          createdAt: 2,
+          spectators: 3,
+        },
+      ],
+    })
+    for (const k of Object.keys(storeMock.api)) delete (storeMock.api as unknown as Record<string, unknown>)[k]
+    storeMock.api.listRooms = vi.fn()
+    storeMock.api.spectate = vi.fn()
+    respond([record])
+  })
+
+  afterEach(() => cleanup())
+
+  it('playing rooms offer 观战 and show the viewer count', () => {
+    render(<Lobby />)
+    expect(screen.getByText('3 观')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '观战 对弈中' }))
+    expect(storeMock.api.spectate).toHaveBeenCalledWith('r_live')
+  })
+
+  it('lists my records with my result, and switches to everyone\'s', async () => {
+    render(<Lobby />)
+    const row = await screen.findByRole('button', { name: '复盘 执黑者 对 AI (hard)' })
+    expect(row).toHaveTextContent('白胜 · 五连')
+    expect(row).toHaveTextContent('41 手')
+    expect(row).toHaveTextContent('负')
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/players/p_me/games?limit=12', expect.anything())
+    fireEvent.click(screen.getByRole('tab', { name: '最近对局' }))
+    await screen.findByRole('button', { name: '复盘 执黑者 对 AI (hard)' })
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/games?limit=12', expect.anything())
   })
 })

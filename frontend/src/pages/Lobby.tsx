@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { InkScape } from '../components/InkScape'
 import { InkStone } from '../components/InkStone'
@@ -9,9 +10,10 @@ import { usePrefs } from '../hooks/usePrefs'
 import { pointSeed } from '../lib/ink'
 import { setPref } from '../lib/prefs'
 import type { AiSide } from '../lib/prefs'
+import { fetchGames, resultFor, shortDate, verdict } from '../lib/records'
 import { DIFFICULTIES } from '../state/ai'
 import { useStore } from '../state/useStore'
-import type { Difficulty, Room, RoomPlayer } from '../ws/protocol'
+import type { Difficulty, GameRecord, Room, RoomPlayer } from '../ws/protocol'
 import { Gate } from './Gate'
 
 const DIFFICULTY_META: Record<Difficulty, { en: string; think: string }> = {
@@ -272,14 +274,109 @@ function LobbyHome() {
                   room={room}
                   mine={room.id === lobby.myRoomId}
                   canJoin={!busy && room.status === 'waiting'}
+                  canWatch={!myRoom && room.status === 'playing'}
                   onJoin={() => api.joinRoom(room.id)}
+                  onWatch={() => api.spectate(room.id)}
                 />
               ))}
             </ul>
           )}
         </section>
+
+        <Records playerId={session.playerId} />
       </main>
     </div>
+  )
+}
+
+type RecordScope = 'mine' | 'recent'
+
+/** 棋谱: my finished games or everyone's, each opening its replay. */
+function Records({ playerId }: { playerId: string | null }) {
+  const navigate = useNavigate()
+  const [scope, setScope] = useState<RecordScope>('mine')
+  const [games, setGames] = useState<GameRecord[] | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    if (!playerId) return
+    const ctl = new AbortController()
+    const load = () =>
+      fetchGames(scope === 'mine' ? { playerId } : 'recent', 12, ctl.signal)
+        .then((gs) => {
+          setGames(gs)
+          setFailed(false)
+        })
+        .catch(() => {
+          if (!ctl.signal.aborted) setFailed(true)
+        })
+    setGames(null)
+    void load()
+    const t = setInterval(load, 30_000)
+    return () => {
+      ctl.abort()
+      clearInterval(t)
+    }
+  }, [playerId, scope])
+
+  return (
+    <section className="records">
+      <header className="sub-head">
+        <h2 className="serif">棋谱</h2>
+        <span className="latin">records</span>
+        <div className="seg" role="tablist" aria-label="棋谱范围">
+          {(
+            [
+              ['mine', '我的对局'],
+              ['recent', '最近对局'],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={scope === id}
+              className={`seg-opt serif${scope === id ? ' on' : ''}`}
+              onClick={() => setScope(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </header>
+      {games === null ? (
+        <p className="records-note serif">{failed ? '棋谱暂时取不到' : '展卷中…'}</p>
+      ) : games.length === 0 ? (
+        <p className="records-note serif">{scope === 'mine' ? '下完一局，棋谱就会留在这里。' : '还没有人下完一局。'}</p>
+      ) : (
+        <ul className="record-list">
+          {games.map((g) => {
+            const res = resultFor(g, playerId)
+            return (
+              <li key={g.id}>
+                <button
+                  type="button"
+                  className={`record-row${res ? ` ${res}` : ''}`}
+                  onClick={() => navigate(`/replay/${g.id}`)}
+                  aria-label={`复盘 ${g.black.nick} 对 ${g.white.nick}`}
+                >
+                  <span className="rec-when latin">{shortDate(g.endedAt)}</span>
+                  <span className="rec-players">
+                    <span className={g.winner === 'black' ? 'won' : ''}>{g.black.nick}</span>
+                    <i className="serif">对</i>
+                    <span className={g.winner === 'white' ? 'won' : ''}>{g.white.nick}</span>
+                  </span>
+                  <span className="rec-verdict serif">{verdict(g)}</span>
+                  <span className="rec-moves latin">{g.moveCount} 手</span>
+                  {res && (
+                    <span className={`rec-mine serif ${res}`}>{res === 'win' ? '胜' : res === 'lose' ? '负' : '和'}</span>
+                  )}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
   )
 }
 
@@ -320,14 +417,19 @@ function RoomRow({
   room,
   mine,
   canJoin,
+  canWatch,
   onJoin,
+  onWatch,
 }: {
   index: number
   room: Room
   mine: boolean
   canJoin: boolean
+  canWatch: boolean
   onJoin: () => void
+  onWatch: () => void
 }) {
+  const viewers = room.spectators ?? 0
   return (
     <li className={`room-row ${room.status}${mine ? ' mine' : ''}`}>
       <span className="rr-no serif">{cnNumber(index)}</span>
@@ -340,11 +442,20 @@ function RoomRow({
       </span>
       <Seat color="black" index={index} player={room.players.find((p) => p.color === 'black')} />
       <Seat color="white" index={index} player={room.players.find((p) => p.color === 'white')} />
-      <span className={`rr-status serif ${room.status}`}>{STATUS_LABEL[room.status]}</span>
+      <span className={`rr-status serif ${room.status}`}>
+        {STATUS_LABEL[room.status]}
+        {viewers > 0 && <small className="rr-viewers latin">{viewers} 观</small>}
+      </span>
       <span className="rr-action">
         {canJoin && (
           <button className="btn sm primary" onClick={onJoin}>
             <span>入座</span>
+          </button>
+        )}
+        {canWatch && (
+          <button className="btn sm" onClick={onWatch} aria-label={`观战 ${room.name}`}>
+            <Icon name="eye" size={14} />
+            <span>观战</span>
           </button>
         )}
       </span>

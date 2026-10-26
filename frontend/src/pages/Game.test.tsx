@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../state/reducer'
@@ -64,6 +64,7 @@ function aiState(game: GameState, youColor: 'black' | 'white' = 'black'): AppSta
       opponentDeadline: null,
       opponentReconnectedAt: null,
       over: null,
+      spectating: false,
     },
     error: null,
   }
@@ -155,5 +156,52 @@ describe('<Game> 人机对局', () => {
     storeMock.state.current = aiState(aiGame())
     renderGame()
     expect(screen.getByRole('button', { name: '认输' })).toBeInTheDocument()
+  })
+})
+
+describe('<Game> 观战', () => {
+  const watched = () =>
+    aiGame({
+      roomId: 'r_watch',
+      turn: 'white',
+      spectators: 2,
+      players: {
+        black: { playerId: 'p_a', nick: '甲', connected: true, isAI: false },
+        white: { playerId: 'p_b', nick: '乙', connected: true, isAI: false },
+      },
+    })
+  const spectatorState = (game: GameState, over: AppState['game']['over'] = null): AppState => {
+    const s = aiState(game)
+    return { ...s, game: { ...s.game, youColor: null, spectating: true, over } }
+  }
+
+  beforeEach(() => {
+    for (const k of Object.keys(storeMock.api)) delete (storeMock.api as unknown as Record<string, unknown>)[k]
+    storeMock.api.stopSpectating = vi.fn()
+    storeMock.api.clearGame = vi.fn()
+    storeMock.api.resign = vi.fn()
+  })
+
+  afterEach(() => cleanup())
+
+  it('shows the turn by colour, the viewer count and 退出观战 instead of 认输', () => {
+    storeMock.state.current = spectatorState(watched())
+    renderGame()
+    expect(screen.getByRole('heading', { name: '观战' })).toBeInTheDocument()
+    expect(screen.getByText('白方落子中')).toBeInTheDocument()
+    expect(screen.getByTitle('观战人数')).toHaveTextContent('2 人观战')
+    expect(screen.queryByRole('button', { name: /认输/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /退出观战/ }))
+    expect(storeMock.api.stopSpectating).toHaveBeenCalledTimes(1)
+    expect(storeMock.api.clearGame).toHaveBeenCalledTimes(1)
+  })
+
+  it('names the winning colour in the verdict and offers the replay', () => {
+    const done = { ...watched(), status: 'finished' as const, winner: 'white' as const, winReason: 'resign' as const }
+    storeMock.state.current = spectatorState(done, { reason: 'resign', winner: 'white' })
+    renderGame()
+    expect(screen.getByRole('heading', { name: '白方胜' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /再/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /逐手复盘/ })).toBeInTheDocument()
   })
 })

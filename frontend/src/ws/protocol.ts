@@ -1,5 +1,6 @@
 /**
- * Message types aligned field-by-field with PROTOCOL.md v1 (M1, frozen).
+ * Message types aligned field-by-field with PROTOCOL.md v1.1 (v1 plus
+ * backward-compatible additions: AI seat choice, spectating, game records).
  * Do not rename fields; any deviation from the spec is a bug.
  */
 
@@ -38,6 +39,7 @@ export type ErrorCode =
   | 'not_in_room'
   | 'room_not_found'
   | 'room_full'
+  | 'room_not_playing'
   | 'not_your_turn'
   | 'illegal_move'
   | 'game_over'
@@ -90,6 +92,14 @@ export interface MoveMsg {
   x: number
   y: number
 }
+/** §11 */
+export interface SpectateMsg {
+  type: 'spectate'
+  roomId: string
+}
+export interface SpectateStopMsg {
+  type: 'spectate_stop'
+}
 
 export type ClientMessage =
   | HelloMsg
@@ -103,6 +113,8 @@ export type ClientMessage =
   | PlayAiMsg
   | ResignMsg
   | MoveMsg
+  | SpectateMsg
+  | SpectateStopMsg
 
 /* ── Server → Client ─────────────────────────────────────────────── */
 
@@ -133,6 +145,8 @@ export interface Room {
   players: RoomPlayer[]
   isAI: boolean
   createdAt: number
+  /** §11: current viewers (absent from v1 servers) */
+  spectators?: number
 }
 
 export type RoomMsg =
@@ -168,6 +182,15 @@ export interface OpponentPresenceMsg {
   connected: boolean
   deadline: number | null
 }
+/** §11: the live game, sent when spectating starts */
+export interface SpectateStartMsg {
+  type: 'spectate_start'
+  game: GameState
+}
+export interface SpectateEndMsg {
+  type: 'spectate_end'
+  roomId: string
+}
 export interface ErrorMsg {
   type: 'error'
   code: ErrorCode | string
@@ -196,6 +219,34 @@ export interface GameState {
   winReason: GameOverReason | null
   /** server clock ts when this snapshot was produced */
   serverNow: number
+  /** every stone in play order (v1.1; absent from v1 servers) */
+  moves?: Point[]
+  /** current viewers (v1.1) */
+  spectators?: number
+}
+
+export interface Point {
+  x: number
+  y: number
+}
+
+/** §12: one side of a recorded game */
+export interface RecordSeat {
+  playerId: string
+  nick: string
+  isAI: boolean
+}
+/** §12: a finished game; listings omit `moves` */
+export interface GameRecord {
+  id: string
+  black: RecordSeat
+  white: RecordSeat
+  winner: Color | null
+  reason: GameOverReason
+  moveCount: number
+  moves?: Point[]
+  startedAt: number
+  endedAt: number
 }
 
 export type ServerMessage =
@@ -208,6 +259,8 @@ export type ServerMessage =
   | GameStateMsg
   | GameOverMsg
   | OpponentPresenceMsg
+  | SpectateStartMsg
+  | SpectateEndMsg
   | ErrorMsg
 
 const SERVER_TYPES = new Set([
@@ -220,6 +273,8 @@ const SERVER_TYPES = new Set([
   'game_state',
   'game_over',
   'opponent_presence',
+  'spectate_start',
+  'spectate_end',
   'error',
 ])
 

@@ -39,6 +39,12 @@ const PATHS = {
   replay: <path d="M3 4v6h6M4.2 15a8 8 0 1 0 1.9-8.3L3 10" />,
   close: <path d="M18 6 6 18M6 6l12 12" />,
   door: <path d="M14 3h5a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-5M9 17l5-5-5-5M14 12H3" />,
+  play: <path d="M7 4.5v15L19 12 7 4.5z" />,
+  pause: <path d="M8 5v14M16 5v14" />,
+  first: <path d="M6 5v14M18 6l-7 6 7 6" />,
+  last: <path d="M18 5v14M6 6l7 6-7 6" />,
+  prev: <path d="M15 6l-6 6 6 6" />,
+  next: <path d="M9 6l6 6-6 6" />,
   clock: (
     <>
       <circle cx="12" cy="12" r="9" />

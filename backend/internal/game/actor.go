@@ -14,8 +14,19 @@ import (
 type SendFunc func(playerID string, data []byte)
 
 // OverFunc is invoked once when the game finishes; the hub uses it to delete
-// the room and return both players to the lobby.
-type OverFunc func(roomID string)
+// the room, return both players to the lobby and record the game.
+type OverFunc func(roomID string, res Result)
+
+// Result is the actor's final report. Reason is empty when the actor died
+// without a verdict (a recovered panic).
+type Result struct {
+	Black, White Seat
+	Moves        []protocol.Pos
+	Winner       Color
+	Reason       string
+	StartedAt    time.Time
+	EndedAt      time.Time
+}
 
 // Seat binds one side of the game to a player.
 type Seat struct {
@@ -47,9 +58,14 @@ type Actor struct {
 	turn       Color
 	moveNumber int
 	lastMove   *protocol.Pos
-	status     string // protocol.RoomPlaying | RoomFinished
+	moves      []protocol.Pos // play order; moves[len-1] == *lastMove
+	status     string         // protocol.RoomPlaying | RoomFinished
 	winner     Color
 	winReason  string
+	startedAt  time.Time
+
+	// spectators receive every broadcast but have no seat (PROTOCOL §11).
+	spectators map[string]struct{}
 
 	seats   [2]*Seat // indexed by Color-1: Black->0, White->1
 	turnDL  time.Time
@@ -73,6 +89,8 @@ func New(roomID string, black, white Seat, cfg protocol.Config, send SendFunc, o
 		status:  protocol.RoomPlaying,
 		seats:   [2]*Seat{&black, &white},
 		reconAt: make(map[Color]time.Time),
+
+		spectators: make(map[string]struct{}),
 	}
 }
 
@@ -110,6 +128,17 @@ func (a *Actor) Reconnect(playerID string) {
 	a.post(func() { a.applyReconnect(playerID) })
 }
 
+// Watch adds a spectator: it gets spectate_start now and every broadcast
+// after. Posting after the game ended is a no-op like any other event.
+func (a *Actor) Watch(playerID string) {
+	a.post(func() { a.applyWatch(playerID) })
+}
+
+// Unwatch removes a spectator.
+func (a *Actor) Unwatch(playerID string) {
+	a.post(func() { a.applyUnwatch(playerID) })
+}
+
 func (a *Actor) post(f func()) {
 	select {
 	case a.mailbox <- f:
@@ -134,9 +163,10 @@ func (a *Actor) run() {
 				stopTimer(t)
 			}
 		}
-		a.onOver(a.roomID)
+		a.onOver(a.roomID, a.result())
 	}()
 
+	a.startedAt = time.Now()
 	a.turnDL = time.Now().Add(a.cfg.MoveTimeout)
 	a.sendGameStart()
 
@@ -263,6 +293,7 @@ func (a *Actor) applyMove(playerID string, x, y int) {
 	a.board.Place(x, y, c)
 	a.moveNumber++
 	a.lastMove = &protocol.Pos{X: x, Y: y}
+	a.moves = append(a.moves, *a.lastMove)
 	if a.moveHook != nil {
 		a.moveHook(playerID)
 	}
@@ -306,6 +337,7 @@ func (a *Actor) applyDisconnect(playerID string) {
 		Connected: false,
 		Deadline:  protocol.Int64Ptr(a.reconAt[c].UnixMilli()),
 	}))
+	a.toSpectators(&protocol.GameStateMsg{Type: protocol.TGameState, Game: a.snapshot()})
 }
 
 func (a *Actor) applyReconnect(playerID string) {
@@ -356,6 +388,26 @@ func (a *Actor) applyReconnect(playerID string) {
 			Connected: true,
 			Deadline:  nil,
 		}))
+		a.toSpectators(&protocol.GameStateMsg{Type: protocol.TGameState, Game: a.snapshot()})
+	}
+}
+
+func (a *Actor) applyWatch(playerID string) {
+	if _, seated := a.colorOf(playerID); seated || a.status != protocol.RoomPlaying {
+		return
+	}
+	a.spectators[playerID] = struct{}{}
+	a.send(playerID, protocol.Marshal(&protocol.SpectateStartMsg{Type: protocol.TSpectateStart, Game: a.snapshot()}))
+	a.broadcastExcept(&protocol.GameStateMsg{Type: protocol.TGameState, Game: a.snapshot()}, playerID)
+}
+
+func (a *Actor) applyUnwatch(playerID string) {
+	if _, ok := a.spectators[playerID]; !ok {
+		return
+	}
+	delete(a.spectators, playerID)
+	if a.status == protocol.RoomPlaying {
+		a.broadcast(&protocol.GameStateMsg{Type: protocol.TGameState, Game: a.snapshot()})
 	}
 }
 
@@ -442,11 +494,47 @@ func (a *Actor) sendGameStart() {
 	a.notify()
 }
 
-func (a *Actor) broadcast(msg any) {
+// broadcast reaches both seats and every spectator.
+func (a *Actor) broadcast(msg any) { a.broadcastExcept(msg, "") }
+
+func (a *Actor) broadcastExcept(msg any, skip string) {
 	data := protocol.Marshal(msg)
 	for _, c := range []Color{Black, White} {
-		a.send(a.seat(c).PlayerID, data)
+		if id := a.seat(c).PlayerID; id != skip {
+			a.send(id, data)
+		}
 	}
+	for id := range a.spectators {
+		if id != skip {
+			a.send(id, data)
+		}
+	}
+}
+
+// toSpectators reaches viewers only (seats get opponent_presence instead).
+func (a *Actor) toSpectators(msg any) {
+	if len(a.spectators) == 0 {
+		return
+	}
+	data := protocol.Marshal(msg)
+	for id := range a.spectators {
+		a.send(id, data)
+	}
+}
+
+// result is the final report for OverFunc.
+func (a *Actor) result() Result {
+	r := Result{
+		Black:     *a.seat(Black),
+		White:     *a.seat(White),
+		Moves:     append([]protocol.Pos(nil), a.moves...),
+		StartedAt: a.startedAt,
+		EndedAt:   time.Now(),
+	}
+	if a.status == protocol.RoomFinished {
+		r.Winner, r.Reason = a.winner, a.winReason
+	}
+	return r
 }
 
 func (a *Actor) sendErr(playerID, code, message string) {
@@ -516,8 +604,10 @@ func (a *Actor) snapshot() *protocol.GameState {
 			Black: seatOf(Black),
 			White: seatOf(White),
 		},
-		Winner:    winner,
-		WinReason: reason,
-		ServerNow: protocol.NowMs(),
+		Winner:     winner,
+		WinReason:  reason,
+		ServerNow:  protocol.NowMs(),
+		Moves:      append(make([]protocol.Pos, 0, len(a.moves)), a.moves...),
+		Spectators: len(a.spectators),
 	}
 }

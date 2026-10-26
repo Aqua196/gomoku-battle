@@ -33,6 +33,8 @@ export interface GameViewState {
   /** timestamp of last opponent reconnect (transient banner) */
   opponentReconnectedAt: number | null
   over: { reason: GameOverReason; winner: Color | null } | null
+  /** watching someone else's game (§11): no seat, youColor stays null */
+  spectating: boolean
 }
 
 export interface AppState {
@@ -59,6 +61,7 @@ export const initialState: AppState = {
     opponentDeadline: null,
     opponentReconnectedAt: null,
     over: null,
+    spectating: false,
   },
   error: null,
 }
@@ -219,6 +222,19 @@ function reduceServer(state: AppState, msg: ServerMessage): AppState {
           over: { reason: msg.reason, winner: msg.winner },
         },
       }
+    }
+    case 'spectate_start':
+      return {
+        ...state,
+        session: applyServerNow(state.session, msg.game.serverNow),
+        game: { ...initialState.game, game: msg.game, spectating: true },
+      }
+    case 'spectate_end': {
+      // Only drop the board we are actually watching; a stale end (e.g.
+      // after switching rooms, or once our own game has started) is ignored.
+      const watched = state.game.spectating ? state.game.game?.roomId : undefined
+      if (!watched || (msg.roomId !== '' && msg.roomId !== watched)) return state
+      return { ...state, game: { ...initialState.game } }
     }
     case 'opponent_presence':
       return {

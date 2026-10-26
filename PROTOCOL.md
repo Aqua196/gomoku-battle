@@ -1,7 +1,7 @@
 # PROTOCOL — WebSocket 协议契约（冻结）
 
 > 本文件是前后端并行的唯一契约。任何偏差都视为 bug；如确需变更，须先修改本文件，再同步前后端实现。
-> 版本：v1（M1）
+> 版本：v1.1——在 v1（M1）上只做**向后兼容的扩展**：`play_ai.color`（§10）、观战（§11）、棋谱 API（§12）、`GameState.moves/spectators`、`Room.spectators`、限流与优雅退出（§6）。v1 客户端不改也能正常对局。
 
 ## 0. 总约定
 
@@ -64,7 +64,7 @@
 // Room
 {"id":"r_x","name":"...","status":"waiting|playing|finished",
  "players":[{"playerId":"p_x","nick":"...","color":"black|white|null","connected":true}],
- "isAI":false,"createdAt":1730000000000}
+ "isAI":false,"createdAt":1730000000000,"spectators":0}
 ```
 
 错误：`room_not_found` `room_full` `already_in_room` `not_in_room` `not_in_lobby`。
@@ -122,9 +122,13 @@
    "white":{"playerId":"p_y","nick":"...","connected":true,"isAI":false}
  },
  "winner":null,"winReason":null,
- "serverNow":1730000000000
+ "serverNow":1730000000000,
+ "moves":[{"x":7,"y":7},...],        // 全部着法，按落子顺序；末项即 lastMove（v1.1 新增）
+ "spectators":0                       // 当前观战人数（v1.1 新增，见 §11）
 }
 ```
+
+- `game_state` 除每次合法落子外，观战人数变化时也会向双方与观战者重发（`moveNumber` 不变）；客户端应以快照覆盖，不得把每帧 `game_state` 当作“一手棋”。
 
 ## 4. 规则与判定（服务端权威）
 
@@ -167,12 +171,13 @@
 - `GET /healthz` → `200 "ok"`
 - `GET /metrics` → `{"connections":int,"lobbyPlayers":int,"rooms":int,"activeGames":int,"gamesPlayed":int,"totalMoves":int,"movesPerSec":float,"aiGames":int}`
   - `movesPerSec`：trailing-60s 窗口内接受落子数 / 60；`aiGames`：人机局启动累计（≠完成数）；其余为瞬时快照。
+- `GET /api/games`、`/api/games/{id}`、`/api/players/{id}/games`：棋谱只读接口，见 §12
 - `/debug/pprof/*`：仅当环境变量 `PPROF=1` 时挂载
 - 生产模式后端直接托管 `frontend/dist` 静态资源（SPA fallback 到 index.html）；开发模式用 vite proxy 转发 `/ws` `/healthz` `/metrics`，无需 CORS。
 
 ## 8. 错误码一览（`{"type":"error","code":"...","message":"人类可读"}`）
 
-`bad_request` `hello_timeout` `unauthorized` `not_in_lobby` `already_in_room` `not_in_room` `room_not_found` `room_full` `not_your_turn` `illegal_move` `game_over` `invalid_difficulty` `not_implemented` `rate_limited` `internal`
+`bad_request` `hello_timeout` `unauthorized` `not_in_lobby` `already_in_room` `not_in_room` `room_not_found` `room_full` `room_not_playing` `not_your_turn` `illegal_move` `game_over` `invalid_difficulty` `not_implemented` `rate_limited` `internal`
 
 ## 9. 前端行为约定
 
@@ -189,3 +194,39 @@
 - AI 思考预算 ≤2s/手（hard 档内迭代深化至 ~1.8s 自限，超时返回当前最优解）。
 - AI 落子与真人同走 `move` 校验与广播路径；真人轮到 AI 回合时发 `move` 被拒 `not_your_turn`。
 - 人机对局中真人断线/认输的判负、重连窗口规则与人人对局完全一致。
+
+## 11. 观战（v1.1）
+
+| C→S | S→C | 说明 |
+|---|---|---|
+| `{"type":"spectate","roomId":"r_x"}` | `{"type":"spectate_start","game":{GameState}}` | 进入观战；之后该局的 `game_state` / `game_over` 同样推给观战者 |
+| `{"type":"spectate_stop"}` | `{"type":"spectate_end","roomId":"r_x"}` | 退出观战；未在观战时 `roomId` 为空串（幂等） |
+
+- 只能观战 `status:"playing"` 的房间：不存在回 `room_not_found`，等待中回 `room_not_playing`；自己在房间/对局中回 `already_in_room`。
+- 观战中再 `spectate` 另一房间即切换（新的 `spectate_start` 取代旧的）。
+- 观战者执行 `create_room` / `join_room` / `play_ai` 或匹配成功时，服务端先发 `spectate_end` 再进入自己的对局；断线即退出观战。
+- 观战者不收 `opponent_presence`；对局任一方断线/重连时改发一帧 `game_state`（从 `players.*.connected` 读在线状态）。
+- 对局结束：观战者收到与双方相同的 `game_over`，随后自动脱离（无需 `spectate_stop`）。
+- `room_list` 中 `Room.spectators` 与 `GameState.spectators` 为当前观战人数。
+
+## 12. 棋谱 HTTP API（v1.1，只读 JSON）
+
+| 方法 | 路径 | 返回 |
+|---|---|---|
+| GET | `/api/games?limit=N` | `{"games":[GameRecord...]}`，最近结束的对局，新→旧，不含 `moves` |
+| GET | `/api/players/{playerId}/games?limit=N` | 同上，仅该玩家参与的对局（AI 座位不建索引） |
+| GET | `/api/games/{id}` | 单局 `GameRecord`（含 `moves`）；不存在 404 + `error{code:"room_not_found"}` |
+
+```jsonc
+// GameRecord（id 即原房间 id）
+{"id":"r_x",
+ "black":{"playerId":"p_x","nick":"...","isAI":false},
+ "white":{"playerId":"ai_x","nick":"AI (hard)","isAI":true},
+ "winner":"black|white|null","reason":"five|draw|timeout|resign|disconnect_timeout|abandoned",
+ "moveCount":31,"moves":[{"x":7,"y":7},...],
+ "startedAt":1730000000000,"endedAt":1730000300000}
+```
+
+- `limit` 缺省或越界按 50；保留最近 200 局与每名玩家最近 50 局（Redis 中记录 30 天过期）。
+- 单局记录写入后不再变化：响应带 `Cache-Control: public, max-age=31536000, immutable`；列表 `no-store`。
+- 前端复盘页 `/replay/{id}` 读取此接口，可脱离登录直接分享。

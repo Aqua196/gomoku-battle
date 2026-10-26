@@ -34,6 +34,8 @@ const (
 	TPlayAI          = "play_ai"
 	TResign          = "resign"
 	TMove            = "move"
+	TSpectate        = "spectate"
+	TSpectateStop    = "spectate_stop"
 )
 
 // Server -> client message types.
@@ -48,6 +50,8 @@ const (
 	TGameState        = "game_state"
 	TGameOver         = "game_over"
 	TOpponentPresence = "opponent_presence"
+	TSpectateStart    = "spectate_start"
+	TSpectateEnd      = "spectate_end"
 )
 
 // Error codes (PROTOCOL §8).
@@ -62,6 +66,7 @@ const (
 	ENotInRoom         = "not_in_room"
 	ERoomNotFound      = "room_not_found"
 	ERoomFull          = "room_full"
+	ERoomNotPlaying    = "room_not_playing"
 	ENotYourTurn       = "not_your_turn"
 	EIllegalMove       = "illegal_move"
 	EGameOver          = "game_over"
@@ -163,7 +168,7 @@ func NowMs() int64 { return time.Now().UnixMilli() }
 func IsKnownClientType(t string) bool {
 	switch t {
 	case THello, TPing, TCreateRoom, TJoinRoom, TLeaveRoom, TListRooms,
-		TMatchmake, TMatchmakeCancel, TPlayAI, TResign, TMove:
+		TMatchmake, TMatchmakeCancel, TPlayAI, TResign, TMove, TSpectate, TSpectateStop:
 		return true
 	}
 	return false

@@ -1,0 +1,280 @@
+/* ── Replay (/replay/:id): the game layout, with a transport under the
+   board and the move list in the side column. ─────────────────────── */
+
+.replay {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  align-items: start;
+  gap: clamp(32px, 4vw, 72px);
+  width: 100%;
+  max-width: 1400px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: clamp(32px, 5vh, 56px) clamp(24px, 3vw, 56px) 48px;
+}
+
+.replay-layout {
+  display: contents;
+}
+
+.replay .board-wrap,
+.replay-transport {
+  width: min(100%, calc(100dvh - 190px), 780px);
+}
+
+.replay-transport {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.replay-transport .icon-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.replay-transport .icon-btn.play {
+  width: 44px;
+  height: 44px;
+  color: var(--on-seal);
+  background: var(--seal);
+}
+
+.replay-transport .icon-btn.play:hover {
+  background: var(--seal-2);
+  color: var(--on-seal);
+}
+
+/* Ink scrubber: a hairline with the played part brushed in vermilion. */
+.replay-scrub {
+  flex: 1;
+  min-width: 60px;
+  height: 24px;
+  margin: 0 10px;
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+}
+
+.replay-scrub::-webkit-slider-runnable-track {
+  height: 2px;
+  background: linear-gradient(90deg, var(--seal) var(--p), var(--line-2) var(--p));
+}
+
+.replay-scrub::-moz-range-track {
+  height: 2px;
+  background: linear-gradient(90deg, var(--seal) var(--p), var(--line-2) var(--p));
+}
+
+.replay-scrub::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: -6px;
+  border: 2px solid var(--seal);
+  border-radius: 50%;
+  background: var(--bg);
+  appearance: none;
+}
+
+.replay-scrub::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--seal);
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+.replay-scrub:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 4px;
+}
+
+.replay-count {
+  min-width: 68px;
+  color: var(--ink-3);
+  font-size: 15px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.replay-count b {
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.replay-side {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.replay-side .side-head {
+  align-items: center;
+}
+
+.replay-seats {
+  display: grid;
+  gap: 10px;
+}
+
+.replay-seat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 15px;
+}
+
+.replay-seat .chip {
+  width: 22px;
+  height: 22px;
+}
+
+.replay-nick {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replay-seat.won .replay-nick {
+  font-weight: 700;
+}
+
+.replay-now {
+  color: var(--ink-2);
+  font-size: 15px;
+  letter-spacing: 0.14em;
+}
+
+.replay-now .latin {
+  color: var(--ink-3);
+  letter-spacing: 0.02em;
+}
+
+.move-list {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-height: 228px;
+  padding: 0;
+  overflow-y: auto;
+  border-top: 1px solid var(--line-2);
+  list-style: none;
+  scrollbar-width: thin;
+}
+
+.move-list button {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--ink-2);
+  font: 500 13px/1 var(--font-mono);
+  cursor: pointer;
+}
+
+.move-list button .latin {
+  min-width: 20px;
+  color: var(--ink-3);
+  font-size: 13px;
+  text-align: right;
+}
+
+/* A dot in the stone's colour before each move. */
+.move-list button::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  align-self: center;
+}
+
+.move-list button.b::before {
+  background: var(--ink);
+}
+
+.move-list button:hover {
+  color: var(--ink);
+}
+
+.move-list button[aria-current='step'] {
+  color: var(--seal);
+  box-shadow: inset 0 -2px 0 var(--seal);
+}
+
+.replay-status {
+  position: relative;
+  z-index: 1;
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 70vh;
+  color: var(--ink-3);
+  text-align: center;
+}
+
+.replay-status p {
+  color: var(--ink-2);
+  font-size: 20px;
+  letter-spacing: 0.3em;
+}
+
+.replay-status .btn {
+  margin-top: 14px;
+}
+
+@media (max-width: 1040px) {
+  .replay {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 24px;
+    padding: 18px 16px 32px;
+  }
+  .replay .board-wrap,
+  .replay-transport {
+    width: min(100%, calc(100dvh - 260px), 680px);
+    min-width: min(100%, 300px);
+  }
+  .replay-side .side-hint {
+    display: none;
+  }
+  /* The side column dissolves into the page flow (as on the game page);
+     read top to bottom: title, board and transport, where we are, the
+     players and result, the move list, actions. */
+  .replay-side {
+    display: contents;
+  }
+  .replay .side-head {
+    order: 1;
+  }
+  .replay .board-stage {
+    order: 2;
+    padding: 0;
+  }
+  .replay-now {
+    order: 3;
+  }
+  .replay-seats {
+    order: 4;
+  }
+  .replay .spec {
+    order: 5;
+  }
+  .move-list {
+    order: 6;
+  }
+  .replay .side-actions {
+    order: 7;
+  }
+}

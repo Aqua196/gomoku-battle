@@ -13,6 +13,9 @@ export interface StoreApi {
   playAi: (difficulty: Difficulty, color?: Color | 'random') => void
   move: (x: number, y: number) => void
   resign: () => void
+  /** §11: watch a playing room / stop watching */
+  spectate: (roomId: string) => void
+  stopSpectating: () => void
   dismissError: () => void
   clearGame: () => void
 }

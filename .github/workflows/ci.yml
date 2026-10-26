@@ -25,6 +25,10 @@ jobs:
         working-directory: backend
         # RedisStore contract tests use miniredis (in-process), no service needed
         run: go test -race -count=1 ./...
+      - name: test (AI property tests, no race)
+        working-directory: backend
+        # long single-goroutine searches that skip themselves under -race
+        run: go test -count=1 ./internal/ai/...
 
   backend-lint:
     runs-on: ubuntu-latest

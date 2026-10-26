@@ -268,8 +268,8 @@ func breakable(b *game.Board) bool {
 // empirical check; the solver's defender set is an over-approximation by
 // construction.)
 func TestVCTHoldsAgainstSearch(t *testing.T) {
-	if testing.Short() {
-		t.Skip("plays full games")
+	if testing.Short() || raceOn {
+		t.Skip("plays full games; single goroutine, nothing for -race to find")
 	}
 	r := rand.New(rand.NewPCG(5, 9))
 	checked := 0
