@@ -406,6 +406,15 @@ func (h *Hub) queuePositionLocked(p *Player) int {
 	return 0
 }
 
+// randSeat flips a fair coin for play_ai{color:"random"}: 0 black, 1 white.
+func randSeat() int {
+	var b [1]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic("hub: crypto/rand unavailable: " + err.Error())
+	}
+	return int(b[0] & 1)
+}
+
 // randID returns "prefix_" + base64url(n random bytes).
 func randID(prefix string, n int) string {
 	b := make([]byte, n)

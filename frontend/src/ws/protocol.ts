@@ -79,6 +79,8 @@ export interface MatchmakeCancelMsg {
 export interface PlayAiMsg {
   type: 'play_ai'
   difficulty: Difficulty
+  /** §10: the human's seat; omitted means black */
+  color?: Color | 'random'
 }
 export interface ResignMsg {
   type: 'resign'

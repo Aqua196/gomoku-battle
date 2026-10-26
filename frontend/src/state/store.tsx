@@ -99,7 +99,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       listRooms: () => send({ type: 'list_rooms' }),
       matchmake: () => send({ type: 'matchmake' }),
       matchmakeCancel: () => send({ type: 'matchmake_cancel' }),
-      playAi: (difficulty) => send({ type: 'play_ai', difficulty }),
+      playAi: (difficulty, color) =>
+        send({ type: 'play_ai', difficulty, ...(color && color !== 'black' ? { color } : {}) }),
       move: (x, y) => send({ type: 'move', x, y }),
       resign: () => send({ type: 'resign' }),
       dismissError: () => dispatch({ type: 'DISMISS_ERROR' }),

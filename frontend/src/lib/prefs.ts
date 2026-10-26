@@ -5,17 +5,21 @@
  */
 
 export type ThemePref = 'light' | 'dark' | 'system'
+/** Seat asked for in play_ai: 执黑 / 执白 / 猜先 (random). */
+export type AiSide = 'black' | 'white' | 'random'
 
 export interface Prefs {
   theme: ThemePref
   sound: boolean
   showOrder: boolean
+  aiSide: AiSide
 }
 
 const KEYS: Record<keyof Prefs, string> = {
   theme: 'gomoku.theme',
   sound: 'gomoku.sound',
   showOrder: 'gomoku.showOrder',
+  aiSide: 'gomoku.aiSide',
 }
 
 function read(key: string): string | null {
@@ -36,10 +40,12 @@ function write(key: string, value: string) {
 
 function load(): Prefs {
   const theme = read(KEYS.theme)
+  const side = read(KEYS.aiSide)
   return {
     theme: theme === 'light' || theme === 'dark' ? theme : 'system',
     sound: read(KEYS.sound) !== '0',
     showOrder: read(KEYS.showOrder) === '1',
+    aiSide: side === 'white' || side === 'random' ? side : 'black',
   }
 }
 

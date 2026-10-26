@@ -5,7 +5,10 @@ import { InkStone } from '../components/InkStone'
 import { Enso, Roll } from '../components/Motion'
 import { Rail } from '../components/Rail'
 import { useNow } from '../hooks/useNow'
+import { usePrefs } from '../hooks/usePrefs'
 import { pointSeed } from '../lib/ink'
+import { setPref } from '../lib/prefs'
+import type { AiSide } from '../lib/prefs'
 import { DIFFICULTIES } from '../state/ai'
 import { useStore } from '../state/useStore'
 import type { Difficulty, Room, RoomPlayer } from '../ws/protocol'
@@ -16,6 +19,12 @@ const DIFFICULTY_META: Record<Difficulty, { en: string; think: string }> = {
   normal: { en: 'steady', think: '1.2s' },
   hard: { en: 'severe', think: '1.8s' },
 }
+
+const SIDES: { id: AiSide; label: string; desc: string }[] = [
+  { id: 'black', label: '执黑', desc: '你执黑先行。' },
+  { id: 'white', label: '执白', desc: 'AI 执黑先行，你后手应对。' },
+  { id: 'random', label: '猜先', desc: '猜先定先后，各凭天意。' },
+]
 
 const STATUS_LABEL: Record<Room['status'], string> = {
   waiting: '等待中',
@@ -70,6 +79,7 @@ export function Lobby() {
 function LobbyHome() {
   const { state, api } = useStore()
   const { session, lobby } = state
+  const { aiSide } = usePrefs()
   const [roomName, setRoomName] = useState('')
   const [matchSince, setMatchSince] = useState<number | null>(null)
   const now = useNow(1000)
@@ -170,11 +180,27 @@ function LobbyHome() {
             </span>
             <h2 className="serif">人机对战</h2>
             <p className="mode-en latin">versus the machine</p>
-            <p className="mode-desc">挑战 α-β 剪枝搜索引擎，你执黑先行。</p>
+            <p className="mode-desc">
+              挑战 α-β 剪枝搜索引擎，{SIDES.find((s) => s.id === aiSide)?.desc}
+            </p>
+            <div className="side-pick" role="radiogroup" aria-label="执子">
+              {SIDES.map((s) => (
+                <button
+                  key={s.id}
+                  role="radio"
+                  aria-checked={aiSide === s.id}
+                  className={`side-opt${aiSide === s.id ? ' on' : ''}`}
+                  onClick={() => setPref('aiSide', s.id)}
+                >
+                  <SideMark side={s.id} />
+                  <span className="serif">{s.label}</span>
+                </button>
+              ))}
+            </div>
             <ul className="diff-list">
               {DIFFICULTIES.map((dd, i) => (
                 <li key={dd.id}>
-                  <button aria-label={dd.label} className="diff-row" onClick={() => api.playAi(dd.id)} disabled={busy}>
+                  <button aria-label={dd.label} className="diff-row" onClick={() => api.playAi(dd.id, aiSide)} disabled={busy}>
                     <span className="diff-name serif">{dd.label}</span>
                     <span className="diff-en latin">{DIFFICULTY_META[dd.id].en}</span>
                     <span className="diff-dots" aria-hidden>
@@ -254,6 +280,23 @@ function LobbyHome() {
         </section>
       </main>
     </div>
+  )
+}
+
+/** A stone for 执黑 / 执白; 猜先 shows the two halves of a fist of stones. */
+function SideMark({ side }: { side: AiSide }) {
+  if (side !== 'random') {
+    return (
+      <span className="chip">
+        <InkStone color={side} seed={side === 'black' ? 11 : 12} />
+      </span>
+    )
+  }
+  return (
+    <span className="chip pair" aria-hidden>
+      <InkStone color="black" seed={13} />
+      <InkStone color="white" seed={14} />
+    </span>
   )
 }
 

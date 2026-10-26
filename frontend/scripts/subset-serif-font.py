@@ -12,6 +12,9 @@ Usage (needs `pip install fonttools brotli`):
 
 Rerun after changing UI copy; characters outside the subset fall back to
 the system serif stack. User-supplied text (nicks, room names) stays sans.
+The glyph list is also written to src/assets/fonts/serif-subset.chars.txt;
+src/lib/fontSubset.test.ts fails when the source uses a character missing
+from it, so a forgotten rerun shows up in CI instead of in production.
 """
 import re
 import sys
@@ -93,6 +96,8 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         sys.exit(__doc__)
     print(f"{len(CHARS)} characters")
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    (OUT_DIR / "serif-subset.chars.txt").write_text(CHARS + "\n", encoding="utf-8")
     for w in WEIGHTS:
         out = build(Path(sys.argv[1]), w)
         print(f"{out.relative_to(Path.cwd()) if out.is_relative_to(Path.cwd()) else out}: {out.stat().st_size} bytes")

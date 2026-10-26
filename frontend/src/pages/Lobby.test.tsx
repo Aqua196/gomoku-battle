@@ -2,6 +2,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setPref } from '../lib/prefs'
 import type { AppState } from '../state/reducer'
 import type { StoreApi } from '../state/useStore'
 import type { Room } from '../ws/protocol'
@@ -53,6 +54,7 @@ describe('<Lobby> 人机对战入口', () => {
     for (const k of Object.keys(storeMock.api)) delete (storeMock.api as unknown as Record<string, unknown>)[k]
     storeMock.api.playAi = vi.fn()
     storeMock.api.listRooms = vi.fn()
+    setPref('aiSide', 'black')
   })
 
   afterEach(() => cleanup())
@@ -65,7 +67,20 @@ describe('<Lobby> 人机对战入口', () => {
     render(<Lobby />)
     fireEvent.click(screen.getByRole('button', { name: label }))
     expect(storeMock.api.playAi).toHaveBeenCalledTimes(1)
-    expect(storeMock.api.playAi).toHaveBeenCalledWith(difficulty)
+    expect(storeMock.api.playAi).toHaveBeenCalledWith(difficulty, 'black')
+  })
+
+  it.each([
+    ['执白', 'white'],
+    ['猜先', 'random'],
+  ] as const)('选「%s」后开局带 color:%s', (label, side) => {
+    render(<Lobby />)
+    const radio = screen.getByRole('radio', { name: label })
+    fireEvent.click(radio)
+    expect(radio).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: '执黑' })).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(screen.getByRole('button', { name: '普通' }))
+    expect(storeMock.api.playAi).toHaveBeenCalledWith('normal', side)
   })
 
   it('在自己房间中或匹配中时人机按钮禁用', () => {

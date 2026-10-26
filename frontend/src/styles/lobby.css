@@ -210,6 +210,75 @@
   letter-spacing: 0;
 }
 
+/* 执黑 / 执白 / 猜先: three quiet options, the chosen one underlined in vermilion. */
+.side-pick {
+  display: flex;
+  gap: 4px;
+  margin: 4px 0 14px;
+}
+
+.side-opt {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 8px 4px;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  cursor: pointer;
+  transition: color 0.3s var(--ease);
+}
+
+.side-opt::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  bottom: 2px;
+  left: 4px;
+  height: 2px;
+  background: var(--seal);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.45s var(--ease-out);
+}
+
+.side-opt:hover,
+.side-opt.on {
+  color: var(--ink);
+}
+
+.side-opt.on::after {
+  transform: none;
+}
+
+.side-opt:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.chip.pair {
+  position: relative;
+  width: 22px;
+  padding: 0;
+  background: none;
+}
+
+.chip.pair .ink-stone {
+  position: absolute;
+  top: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--board-paper);
+}
+
+.chip.pair .ink-stone + .ink-stone {
+  left: 7px;
+}
+
 .diff-list {
   display: grid;
   padding: 0;

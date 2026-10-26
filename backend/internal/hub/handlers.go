@@ -329,15 +329,31 @@ func (h *Hub) MatchmakeCancel(p *Player) {
 	h.reply(p, protocol.NewMatchmaking(protocol.MatchCancelled, 0))
 }
 
-// PlayAI seats the caller as black against an embedded AI at the given
-// difficulty, in an isAI room (PROTOCOL §2). The AI is a pseudo-player: it
+// PlayAI seats the caller against an embedded AI at the given difficulty,
+// in an isAI room (PROTOCOL §10). color picks the caller's seat: black
+// (default, moves first), white, or random. The AI is a pseudo-player: it
 // holds no conn and posts its moves through the same actor mailbox.
-func (h *Hub) PlayAI(p *Player, difficulty string) {
+func (h *Hub) PlayAI(p *Player, difficulty, color string) {
 	switch difficulty {
 	case "easy", "normal", "hard":
 	default:
 		h.replyErr(p, protocol.EInvalidDifficulty, "difficulty must be easy|normal|hard")
 		return
+	}
+	human := 0 // seat index: 0 black, 1 white
+	switch color {
+	case "", protocol.ColorBlack:
+	case protocol.ColorWhite:
+		human = 1
+	case "random":
+		human = randSeat()
+	default:
+		h.replyErr(p, protocol.EBadRequest, "color must be black|white|random")
+		return
+	}
+	aiColor := protocol.ColorWhite
+	if human == 1 {
+		aiColor = protocol.ColorBlack
 	}
 	var actor *game.Actor
 	var roomID string
@@ -349,18 +365,19 @@ func (h *Hub) PlayAI(p *Player, difficulty string) {
 	}
 	dequeued := h.dequeueLocked(p)
 	e := h.newRoomLocked(p.Nick()+" vs AI ("+difficulty+")", true)
-	e.seats[0] = p
-	e.seats[1] = &Player{
+	bot := &Player{
 		rec:  &store.PlayerRecord{PlayerID: randID("ai", 8), Nick: "AI (" + difficulty + ")"},
 		isAI: true,
 	}
+	e.seats[human], e.seats[1-human] = p, bot
 	roomID = e.meta.ID
 	p.roomID = roomID
 	actor = h.startGameLocked(e)
-	actor.SetObserver(ai.NewDriver(actor, actor.Done(), e.seats[1].ID(),
-		protocol.ColorWhite, difficulty, h.cfg.AIThink).Notify)
+	actor.SetObserver(ai.NewDriver(actor, actor.Done(), bot.ID(),
+		aiColor, difficulty, h.cfg.AIThink).Notify)
 	h.aiGames.Add(1)
-	slog.Info("ai game started", "playerId", p.ID(), "roomId", roomID, "difficulty", difficulty)
+	slog.Info("ai game started", "playerId", p.ID(), "roomId", roomID,
+		"difficulty", difficulty, "aiColor", aiColor)
 	h.mu.Unlock()
 
 	h.syncRoomStore(roomID)

@@ -179,6 +179,7 @@ type Inbound struct {
 	Name       string `json:"name"`
 	RoomID     string `json:"roomId"`
 	Difficulty string `json:"difficulty"`
+	Color      string `json:"color"` // play_ai seat: black|white|random (default black)
 	X          *int   `json:"x"`
 	Y          *int   `json:"y"`
 	TS         *int64 `json:"ts"`

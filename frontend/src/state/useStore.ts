@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { Difficulty } from '../ws/protocol'
+import type { Color, Difficulty } from '../ws/protocol'
 import type { AppState } from './reducer'
 
 export interface StoreApi {
@@ -10,7 +10,7 @@ export interface StoreApi {
   listRooms: () => void
   matchmake: () => void
   matchmakeCancel: () => void
-  playAi: (difficulty: Difficulty) => void
+  playAi: (difficulty: Difficulty, color?: Color | 'random') => void
   move: (x: number, y: number) => void
   resign: () => void
   dismissError: () => void

@@ -277,3 +277,73 @@ func TestAIDriverNoLeak(t *testing.T) {
 	}
 	t.Fatalf("goroutines after game_over = %d, baseline %d", runtime.NumGoroutine(), base)
 }
+
+// TestPlayAIAsWhite: color:"white" seats the human second; the AI opens as
+// black without any human input, then waits for the human's reply.
+func TestPlayAIAsWhite(t *testing.T) {
+	ts, _ := newTestServer(t, aiCfg(60*time.Millisecond))
+	a := dial(t, ts)
+	defer a.Close()
+	hello(t, a, "alice")
+	if err := a.SendMap(map[string]any{"type": "play_ai", "difficulty": "easy", "color": "white"}); err != nil {
+		t.Fatal(err)
+	}
+	gs, err := a.WaitType("game_start", 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gs["youColor"] != "white" {
+		t.Fatalf("youColor = %v, want white", gs["youColor"])
+	}
+	black := gs["game"].(map[string]any)["players"].(map[string]any)["black"].(map[string]any)
+	if black["isAI"] != true {
+		t.Fatalf("black seat should be the AI: %v", black)
+	}
+	st, err := a.WaitType("game_state", 3*time.Second)
+	if err != nil {
+		t.Fatalf("AI did not open: %v", err)
+	}
+	g := st["game"].(map[string]any)
+	if g["turn"] != "white" || g["moveNumber"].(float64) != 1 {
+		t.Fatalf("after AI opening: turn=%v move=%v", g["turn"], g["moveNumber"])
+	}
+	// The human (white) can now answer; the AI replies again.
+	lm := g["lastMove"].(map[string]any)
+	x, y := int(lm["x"].(float64)), int(lm["y"].(float64))
+	if err := a.SendMap(map[string]any{"type": "move", "x": (x + 1) % 15, "y": y}); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		st, err = a.WaitType("game_state", 3*time.Second)
+		if err != nil {
+			t.Fatalf("AI did not reply: %v", err)
+		}
+		if st["game"].(map[string]any)["moveNumber"].(float64) == 3 {
+			return
+		}
+	}
+}
+
+// TestPlayAIColorRandomAndInvalid: random lands on a real seat; an unknown
+// color is a bad_request.
+func TestPlayAIColorRandomAndInvalid(t *testing.T) {
+	ts, _ := newTestServer(t, aiCfg(40*time.Millisecond))
+	a := dial(t, ts)
+	defer a.Close()
+	hello(t, a, "alice")
+	if err := a.SendMap(map[string]any{"type": "play_ai", "difficulty": "easy", "color": "purple"}); err != nil {
+		t.Fatal(err)
+	}
+	expectErr(t, a, protocol.EBadRequest)
+
+	if err := a.SendMap(map[string]any{"type": "play_ai", "difficulty": "easy", "color": "random"}); err != nil {
+		t.Fatal(err)
+	}
+	gs, err := a.WaitType("game_start", 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := gs["youColor"]; c != "black" && c != "white" {
+		t.Fatalf("youColor = %v", c)
+	}
+}

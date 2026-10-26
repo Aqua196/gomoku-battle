@@ -52,7 +52,7 @@
 | `{"type":"list_rooms"}` | `{"type":"room_list","rooms":[Room...]}` | 主动拉取 |
 | `{"type":"matchmake"}` | `{"type":"matchmaking","status":"queued","position":1}` | 进入匹配队列 |
 | `{"type":"matchmake_cancel"}` | `{"type":"matchmaking","status":"cancelled"}` | 退出队列 |
-| `{"type":"play_ai","difficulty":"easy\|normal\|hard"}` | `game_start`（M2） | M1 服务端回复 `error{code:"not_implemented"}` |
+| `{"type":"play_ai","difficulty":"easy\|normal\|hard","color":"black\|white\|random"}` | `game_start` | 见 §10；`color` 可省略（=black） |
 | `{"type":"resign"}` | — | 对局中认输（见 §4） |
 
 - 房间列表变化时，服务端向**所有 lobby 玩家**推送 `room_list`（全量）。实现要求：同一连接的 `room_list` 推送必须**合并**（发送缓冲内只保留最新一份，脏位合并），防止 churn 期间正常客户端被误判慢消费踢出。
@@ -182,8 +182,9 @@
 
 ## 10. AI 对局约定（M2）
 
-- `play_ai{difficulty}`，`difficulty ∈ "easy"|"normal"|"hard"`；非法值回 `error{code:"invalid_difficulty"}`；已在房间回 `already_in_room`。
-- 座位固定：**真人恒执黑先手，AI 恒执白**。房间内 AI 为伪玩家：`players.white = {playerId:"ai_*", nick:"AI (difficulty)", connected:true, isAI:true}`（`connected` 恒真，为渲染值）。
+- `play_ai{difficulty, color?}`，`difficulty ∈ "easy"|"normal"|"hard"`；非法值回 `error{code:"invalid_difficulty"}`；已在房间回 `already_in_room`。
+- `color ∈ "black"|"white"|"random"` 为**真人**所执颜色，缺省 `"black"`（v1 行为）；`"random"` 由服务端猜先；其他值回 `bad_request`。真人执白时 AI 执黑，`game_start` 后由 AI 先落子。
+- 房间内 AI 为伪玩家：`players.<AI 颜色> = {playerId:"ai_*", nick:"AI (difficulty)", connected:true, isAI:true}`（`connected` 恒真，为渲染值）。
 - isAI 房间出现在 `room_list`（与人人房间同构，status=playing）。
 - AI 思考预算 ≤2s/手（hard 档内迭代深化至 ~1.8s 自限，超时返回当前最优解）。
 - AI 落子与真人同走 `move` 校验与广播路径；真人轮到 AI 回合时发 `move` 被拒 `not_your_turn`。

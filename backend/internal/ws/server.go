@@ -322,7 +322,7 @@ func (sess *session) dispatch(data []byte) {
 	case protocol.TMatchmakeCancel:
 		h.MatchmakeCancel(p)
 	case protocol.TPlayAI:
-		h.PlayAI(p, in.Difficulty)
+		h.PlayAI(p, in.Difficulty, in.Color)
 	case protocol.TResign:
 		h.Resign(p)
 	case protocol.TMove:

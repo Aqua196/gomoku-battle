@@ -42,7 +42,7 @@ cd frontend && npm run build && cd ../backend && go run ./cmd/server
 1. 开两个浏览器标签进 `http://localhost:8080`，各填昵称进大厅
 2. 两边点「快速匹配」→ 自动开局；也可建房/加入房间列表
 3. 轮流落子，五连判胜；认输/离开即负；断网 30s 内回来自动恢复棋局
-4. 大厅点「人机对战（简单/普通/困难）」→ 你执黑对 AI 执白
+4. 大厅点「人机对战」，选执黑 / 执白 / 猜先和难度（简单/普通/困难）即开局
 5. `curl localhost:8080/metrics` 看实时指标；`docker compose logs app` 看结构化事件
 
 ## 测试与关卡
