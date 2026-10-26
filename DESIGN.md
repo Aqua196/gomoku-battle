@@ -79,14 +79,18 @@
 - **actor 韧性**：run() defer recover + 无条件 onOver 回收房间与玩家；timer 命中先排空 mailbox 再裁决（先到先生效）；双方同断时判负挂起，重连方到场再结算。
 - **时钟同步**：welcome/game_state 携带 serverNow，前端用 EMA 估算 offset 渲染倒计时。
 
-## 7. M2 AI 设计（internal/ai）
+## 7. AI 设计（internal/ai，v2 引擎）
 
-- **结构**：`engine.go`（搜索/评估，纯逻辑、无状态可测）+ `driver.go`（嵌入式假客户端）。Driver 通过 actor 的 `SetObserver` 钩子收 GameState，判定"轮到 AI"才思考，思考在 driver 自己的 goroutine 里跑，结果经 `Actor.Move` 回投——**与真人落子走同一条 mailbox 路径**（校验、计时、广播全部复用，无第二协议路径）。
-- **难度**（`For()`）：easy=固定深度2/广度6/±40%评估噪声/0.4s；normal=深度4/广度10/1.2s；hard=迭代深化到 1.8s/广度14。协议层 deadline 2s 之外，引擎用 `cfg.Think` 自限，超时返回"当前最优"（迭代深化保证任意深度都有完整解）。
-- **搜索**：negamax + alpha-beta；候选点=已有棋子邻域（nearStone）→ `pointScore` 排序（杀棋/活四/双杀/活三/封堵优先）→ 截断到 Breadth。`expired()` 在节点内检查 deadline。
-- **强制层**：搜索前依次检查 `winInOne(me)` → `winInOne(opp)` → `openFourInOne(me)` → `openFourInOne(opp)`，单步成五、单步必防、单步造活四（`.OOOO.`）、封堵对手活三造活四在**所有难度**优先执行。
-- **评估**：`pointScore` 基于 `runLenAndOpen` 区分双端开放（活四/活三/活二）、单端受阻（冲四/眠三/眠二）与双端封死（死线=0分），并对双冲四/冲四活三/双活三组合给予定向加分；`boardScore`=Σ 5-窗口棋型分（含 `.XXX.` 活三与 `.XXXX.` 活四窗口加成）+ centerBias；终局分=me分−opp分×权重(>1，必防倾向)。
-- **生命周期**：actor 结束关 `done` → driver.loop 退出；AI 座位 `connected` 恒 true，断开/认输只清理真人侧。
+- **结构**：`driver.go`（嵌入式假客户端）不变；引擎拆为 `lines.go`（72 条可成五的线及每格所在线的查表）、`position.go`（增量棋盘与评估）、`tt.go`（置换表）、`vcf.go` / `vct.go`（威胁求解）、`search.go`（迭代加深 PVS）、`engine.go`（难度预设与决策顺序）。`baseline/` 冻结 v1 引擎，仅供 `cmd/aiarena` 与基准测试做对照。
+- **与对局的接口**：Driver 通过 actor 的 `SetObserver` 钩子收 GameState，轮到 AI 才思考；结果经 `Actor.Move` 回投，**与真人落子走同一条 mailbox 路径**。全局信号量把同时思考的 AI 数限制在 CPU 核数（搜索是 CPU 密集，超额并行只会让每局都搜得更浅）；思考截止取「预设时长」与「回合截止 −1.5s」的较小者，排队再久也不会超时判负。
+- **增量评估**：落子只重算经过该格的 4 条线（单次扫描同时算黑白，滑动窗口计数）。每条线缓存：棋型分（5 格窗口按子数计分，另加活三 `.XXX.` / 跳活三 `.X.XX.` 与「一线两个成五点」活四加成）、成五点掩码、成四点掩码、成三点掩码。评估 = 己方总分×1.1 − 对方总分（行棋方多一个先手）。实测增量更新 0.92µs，整盘重建 10.0µs（`docs/evidence/ai-bench.txt`）。
+- **搜索**：迭代加深 + PVS（主变例全窗口、其余零窗口试探）；Zobrist 哈希置换表（mate 分按层数归一化存取）存界与最佳着，下一层迭代和下一手都复用；置换表最佳着与 killer 着提前；候选点为距已有棋子 2 格内的空点，按双方 `pointScores` 一次遍历打分后只做 top-k 部分排序。精确战术在每个节点先于置换表判定：能成五即胜；对方两个成五点即负；对方单个成五点时只搜封堵且**不消耗深度**（强制应手延伸，冲四链能读到底）。用时过 45% 预算即不再开启下一层迭代。
+- **VCF（连续冲四）**：进攻方只下成四的棋，防守方应手唯一；一手造出两个成五点即胜。失败局面按 Zobrist 记忆。随机局面测试中找到最长 19 手的连续冲四杀，且每个报告的杀都在强制应对下逐手走通（`TestVCFSoundOnRandomPositions`）。
+- **VCT（冲四 + 活三）**：活三的防守点取「进攻方所有成四点 + 防守方所有冲四」的超集——只会漏掉杀，不会虚报杀；对每个防守都要有后续 VCT 才算成立（AND-OR 搜索，节点预算封顶）。`TestVCTHoldsAgainstSearch` 让困难档 AI 当防守方，12 个 VCT 局面全部被走通。
+- **决策顺序**（`choose`）：成五 → 堵五 → 己方 VCF → 己方 VCT → （easy/normal）造活四 / 堵活四 → 搜索；搜索前若对方有 VCF/VCT，先剔除走后对方仍能杀的候选（先保证破 VCF，再尽量破 VCT；全部破不了则保留全集让搜索选最顽强的一手）。
+- **难度**：easy = 2 层、广度 6、根节点 ±40% 噪声、无威胁求解（刻意可赢）；normal = 4 层 + 6 步内 VCF；hard = 迭代加深到 1.8s + VCF(12)/VCT(4) 攻防 + 64K 置换表。
+- **强度（300ms/手，每个开局交换先后各一局，共 40 局）**：hard 对 v1 hard 38 胜 2 负（95%），normal 对 v1 normal 70%，easy 对 v1 easy 45%（持平，设计如此）；新引擎内部 hard 对 normal 78%、normal 对 easy 90%。原始输出见 `docs/evidence/ai-arena-*.txt`，复现：`go run ./cmd/aiarena -openings 20 -think 300ms -a hard -b v1:hard`。
+- **生命周期**：actor 结束关 `done` → driver.loop 退出（排队等信号量时同样退出）；AI 座位 `connected` 恒 true，断开/认输只清理真人侧。
 
 ## 8. M4 工程化（部署/持久化/观测）
 

@@ -1,11 +1,22 @@
 package ai
 
 import (
+	"log/slog"
+	"runtime"
 	"time"
 
 	"github.com/Aqua196/gomoku-battle/backend/internal/game"
 	"github.com/Aqua196/gomoku-battle/backend/internal/protocol"
 )
+
+// thinkSlots bounds concurrent searches to the CPU count: the search is
+// CPU-bound, so more parallel thinkers would only slow every one of them
+// down (each would reach shallower depths in its budget). Excess drivers
+// queue for a slot.
+var thinkSlots = make(chan struct{}, runtime.GOMAXPROCS(0))
+
+// turnMargin keeps the AI's move clear of its own turn deadline.
+const turnMargin = 1500 * time.Millisecond
 
 // Mover is the driver's way back into the game: it posts a move to the
 // actor mailbox — the exact path a human client's move takes. game.Actor
@@ -97,10 +108,27 @@ func (d *Driver) loop() {
 				me = game.White
 			}
 			b := boardFrom(gs)
-			// Cancellable on actor done: a finished game must not burn the
-			// think budget.
-			x, y, ok := d.eng.MoveCancel(&b, me, time.Now().Add(d.think), d.done)
+			select {
+			case thinkSlots <- struct{}{}:
+			case <-d.done:
+				return
+			}
+			// Budget: the preset's think time, cut short if queueing for a
+			// slot ate into the turn clock. Cancellable on actor done: a
+			// finished game must not burn the budget.
+			deadline := time.Now().Add(d.think)
+			if gs.TurnDeadline != nil {
+				turnEnd := time.UnixMilli(*gs.TurnDeadline).Add(-turnMargin)
+				if turnEnd.Before(deadline) {
+					deadline = turnEnd
+				}
+			}
+			x, y, ok := d.eng.MoveCancel(&b, me, deadline, d.done)
+			<-thinkSlots
 			if ok {
+				st := d.eng.Stats()
+				slog.Debug("ai move", "aiId", d.aiID, "x", x, "y", y, "reason", st.Reason,
+					"depth", st.Depth, "nodes", st.Nodes, "threatNodes", st.VCFNodes, "elapsed", st.Elapsed)
 				d.mover.Move(d.aiID, x, y)
 			}
 		}

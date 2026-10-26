@@ -120,7 +120,7 @@ function GameView({ game }: { game: GameState }) {
         label: '再来一局',
         run: () => {
           api.clearGame()
-          api.playAi(difficulty)
+          api.playAi(difficulty, prefs.aiSide)
         },
       }
     : {

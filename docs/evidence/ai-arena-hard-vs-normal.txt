@@ -1,0 +1,46 @@
+$ go run ./cmd/aiarena -openings 20 -think 300ms -a hard -b normal
+opening  0 game 0  new=white   24 moves  new wins
+opening  0 game 1  new=black   31 moves  new wins
+opening  1 game 0  new=white   22 moves  new wins
+opening  1 game 1  new=black   19 moves  new wins
+opening  2 game 1  new=black   23 moves  new wins
+opening  2 game 0  new=white   33 moves  opponent wins
+opening  3 game 0  new=white   32 moves  new wins
+opening  3 game 1  new=black   36 moves  opponent wins
+opening  4 game 1  new=black   36 moves  opponent wins
+opening  4 game 0  new=white   70 moves  new wins
+opening  5 game 0  new=white   39 moves  opponent wins
+opening  5 game 1  new=black   35 moves  new wins
+opening  6 game 0  new=white   32 moves  new wins
+opening  6 game 1  new=black   17 moves  new wins
+opening  7 game 1  new=black   35 moves  new wins
+opening  7 game 0  new=white   36 moves  new wins
+opening  8 game 0  new=white   27 moves  opponent wins
+opening  8 game 1  new=black   34 moves  opponent wins
+opening  9 game 1  new=black   23 moves  new wins
+opening 10 game 0  new=white   31 moves  opponent wins
+opening  9 game 0  new=white   42 moves  new wins
+opening 10 game 1  new=black   23 moves  new wins
+opening 11 game 1  new=black   43 moves  new wins
+opening 11 game 0  new=white   26 moves  new wins
+opening 12 game 1  new=black   29 moves  new wins
+opening 12 game 0  new=white   30 moves  new wins
+opening 13 game 1  new=black   23 moves  new wins
+opening 13 game 0  new=white   62 moves  new wins
+opening 14 game 0  new=white   28 moves  new wins
+opening 14 game 1  new=black   27 moves  new wins
+opening 15 game 0  new=white   17 moves  opponent wins
+opening 15 game 1  new=black   27 moves  new wins
+opening 16 game 0  new=white   22 moves  new wins
+opening 16 game 1  new=black   30 moves  opponent wins
+opening 17 game 1  new=black   17 moves  new wins
+opening 18 game 0  new=white   22 moves  new wins
+opening 18 game 1  new=black   17 moves  new wins
+opening 17 game 0  new=white   56 moves  new wins
+opening 19 game 1  new=black   35 moves  new wins
+opening 19 game 0  new=white   34 moves  new wins
+
+current hard vs normal, 40 games, think 300ms
+current: 31 wins, 9 losses, 0 draws (78%)
+current per searched move: depth 5.9, nodes 28602, 250.814675ms; moves decided by VCF: 133
+opponent per move: 2.436216ms

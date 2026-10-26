@@ -1,0 +1,12 @@
+$ go test -run XXX -bench . -benchtime 3s ./internal/ai/
+goos: linux
+goarch: amd64
+pkg: github.com/Aqua196/gomoku-battle/backend/internal/ai
+cpu: Intel(R) Xeon(R) Processor @ 2.80GHz
+BenchmarkEvalIncremental-4   	 3821619	       916.9 ns/op
+BenchmarkEvalRebuild-4       	  377635	      9974 ns/op
+BenchmarkSearchDepth6-4      	      61	  67866025 ns/op	      2857 nodes/search
+BenchmarkBaselineDepth4-4    	      64	  56819261 ns/op
+BenchmarkSearchDepth4-4      	     285	  12945763 ns/op
+PASS
+ok  	github.com/Aqua196/gomoku-battle/backend/internal/ai	18.749s

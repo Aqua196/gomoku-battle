@@ -1,0 +1,46 @@
+$ go run ./cmd/aiarena -openings 20 -think 300ms -a easy -b v1:easy
+opening  0 game 1  new=black   20 moves  opponent wins
+opening  1 game 0  new=white   23 moves  opponent wins
+opening  0 game 0  new=white   39 moves  opponent wins
+opening  2 game 0  new=white   30 moves  new wins
+opening  1 game 1  new=black   49 moves  new wins
+opening  2 game 1  new=black   37 moves  new wins
+opening  3 game 0  new=white   31 moves  opponent wins
+opening  3 game 1  new=black   18 moves  opponent wins
+opening  4 game 0  new=white   15 moves  opponent wins
+opening  5 game 0  new=white   15 moves  opponent wins
+opening  4 game 1  new=black   23 moves  new wins
+opening  5 game 1  new=black   21 moves  new wins
+opening  6 game 1  new=black   28 moves  opponent wins
+opening  6 game 0  new=white   37 moves  opponent wins
+opening  7 game 1  new=black   29 moves  new wins
+opening  7 game 0  new=white   50 moves  new wins
+opening  8 game 0  new=white   29 moves  opponent wins
+opening  8 game 1  new=black   24 moves  opponent wins
+opening  9 game 1  new=black   31 moves  new wins
+opening 10 game 0  new=white   21 moves  opponent wins
+opening  9 game 0  new=white  103 moves  opponent wins
+opening 11 game 0  new=white   40 moves  new wins
+opening 11 game 1  new=black   91 moves  new wins
+opening 10 game 1  new=black  225 moves  draw
+opening 12 game 0  new=white   32 moves  new wins
+opening 12 game 1  new=black   68 moves  opponent wins
+opening 13 game 1  new=black   31 moves  new wins
+opening 14 game 0  new=white   29 moves  opponent wins
+opening 13 game 0  new=white  118 moves  new wins
+opening 15 game 0  new=white   35 moves  opponent wins
+opening 14 game 1  new=black   29 moves  new wins
+opening 16 game 0  new=white   23 moves  opponent wins
+opening 15 game 1  new=black   42 moves  opponent wins
+opening 16 game 1  new=black   17 moves  new wins
+opening 17 game 0  new=white   29 moves  opponent wins
+opening 17 game 1  new=black   33 moves  new wins
+opening 18 game 1  new=black   25 moves  new wins
+opening 18 game 0  new=white   26 moves  new wins
+opening 19 game 0  new=white   21 moves  opponent wins
+opening 19 game 1  new=black   38 moves  opponent wins
+
+current easy vs v1:easy, 40 games, think 300ms
+current: 18 wins, 21 losses, 1 draws (45%)
+current per searched move: depth 2.0, nodes 51, 293.533µs; moves decided by VCF: 0
+opponent per move: 801.506µs

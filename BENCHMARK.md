@@ -1,4 +1,4 @@
-# BENCHMARK — M3 压测报告
+# BENCHMARK — 压测与 AI 引擎报告
 
 > 所有数字均来自真实运行；原始输出存档 `docs/evidence/`。复现命令见末节。
 >
@@ -76,3 +76,39 @@ go tool pprof -top -nodecount=30 http://localhost:8080/debug/pprof/profile?secon
 - 单连接写阻塞（慢客户端）仍是延迟尾部主因；下一步可按连接批量写/写队列分片（M3 之外）。
 - `TestConcurrent100Rooms` 历史 1 次偶发 close 1006（高负载 pong 超时）；M3 修复了一个真实 flake（双重重连断言被陈旧 presence 帧污染）。全程 `go test -race ./...` 全绿。
 - room_list 合并广播为降频优化；`protoRoomLocked` 仍 O(rooms) 持锁渲染（每 tick ≤1 次），规模再上一个量级时的下一刀位置已明确（写队列分片/增量列表）。
+
+## 6. AI 引擎（v2 对 v1）
+
+测试机：4 vCPU（Intel Xeon 2.8GHz）。原始输出 `docs/evidence/ai-bench.txt`、`docs/evidence/ai-arena-*.txt`。
+
+### 6.1 微基准（`go test -bench . ./internal/ai/`）
+
+| 项 | 结果 | 说明 |
+|---|---|---|
+| 落子后评估：增量 | 0.92 µs | 只重扫经过该格的 4 条线 |
+| 落子后评估：整盘重建 | 9.97 µs | 同一评估函数全盘重算，≈10.9× |
+| 定深 4 搜索（4 个中盘局面） | v1 56.8 ms → v2 12.9 ms | 同深度同广度，≈4.4× |
+| 定深 6 搜索（同上） | 67.9 ms，平均 2857 节点/次 | v1 在 1.8s 内通常到不了 6 层 |
+
+### 6.2 对弈（`cmd/aiarena`，300ms/手，20 个随机开局 × 交换先后 = 40 局）
+
+| 对阵 | 胜 | 负 | 和 | 胜率 | v2 平均搜索深度 |
+|---|---|---|---|---|---|
+| v2 hard vs v1 hard | 38 | 2 | 0 | 95% | 6.5 |
+| v2 normal vs v1 normal | 28 | 12 | 0 | 70% | 4.0 |
+| v2 easy vs v1 easy | 18 | 21 | 1 | 45% | 2.0 |
+| v2 hard vs v2 normal | 31 | 9 | 0 | 78% | 5.9 |
+| v2 normal vs v2 easy | 36 | 4 | 0 | 90% | 4.0 |
+
+- 搜索有时间预算，结果随机器负载有 ±1~2 局波动（多次运行 hard 对 v1 hard 在 95%~98%）。
+- easy 刻意保持与 v1 同档（2 层 + 噪声、无威胁求解），用来给新手赢。
+- v2 hard 的落败局几乎都是执白（自由规则下黑棋先手优势明显）。
+
+复现：
+
+```bash
+cd backend
+go test -run XXX -bench . -benchtime 3s ./internal/ai/
+go run ./cmd/aiarena -openings 20 -think 300ms -a hard -b v1:hard    # -b normal 则与 v2 自身其他难度对弈
+go run ./cmd/aiarena -openings 5 -think 300ms -trace                 # 打印 v2 落败局的逐手记录
+```

@@ -72,9 +72,9 @@ func TestAIBlockOppFour(t *testing.T) {
 	}{
 		// X X X X . with left end blocked by edge -> only (4,7) works.
 		{"horizontal_edge", [][2]int{{0, 7}, {1, 7}, {2, 7}, {3, 7}}, [][2]int{{10, 10}, {11, 11}, {12, 12}}, [2]int{4, 7}},
-		// . X X X X with right end blocked by white -> only (7,5) works.
-		{"horizontal_blocked", [][2]int{{3, 5}, {4, 5}, {5, 5}, {6, 5}}, [][2]int{{8, 5}, {2, 2}}, [2]int{7, 5}},
-		{"vertical", [][2]int{{7, 3}, {7, 4}, {7, 5}, {7, 6}}, [][2]int{{7, 8}, {1, 1}}, [2]int{7, 7}},
+		// O X X X X . with the left end blocked by white -> only (7,5) works.
+		{"horizontal_blocked", [][2]int{{3, 5}, {4, 5}, {5, 5}, {6, 5}}, [][2]int{{2, 5}, {2, 2}}, [2]int{7, 5}},
+		{"vertical", [][2]int{{7, 3}, {7, 4}, {7, 5}, {7, 6}}, [][2]int{{7, 2}, {1, 1}}, [2]int{7, 7}},
 		{"diag", [][2]int{{4, 4}, {5, 5}, {6, 6}, {7, 7}}, [][2]int{{3, 3}, {0, 14}}, [2]int{8, 8}},
 	}
 	for _, diff := range []string{"easy", "normal", "hard"} {
