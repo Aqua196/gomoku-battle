@@ -61,3 +61,17 @@
 - **R9** Dockerfile → `HEALTHCHECK`（curl /healthz）+ ca-certificates。
 - **R13** `/metrics` 语义 → PROTOCOL §7 已写明 movesPerSec=trailing-60s、aiGames=启动累计。
 - **R14** contract 套件缺口 → 补 TTL/滑动/有界降级三用例。
+
+## v1.1 深化
+
+| 范围 | 实现 | 关卡/证据 | 状态 |
+|---|---|---|---|
+| 服务端加固：限流、单 IP 上限、优雅退出、HTTP 超时、静态托管防目录穿越 | `internal/ws`、`cmd/server` | `TestRateLimitDropsFlood` `TestMaxConnsPerIP` `TestShutdownGoesAway` `TestSPAHandler` | ✅ |
+| CI 补全：前端 vitest、golangci-lint、字体子集覆盖检查 | `.github/workflows/ci.yml`、`backend/.golangci.yml` | lint 0 issues；`fontSubset.test.ts` | ✅ |
+| 人机可选执黑/执白/猜先 | `play_ai.color`（PROTOCOL §10） | `TestPlayAIAsWhite` `TestPlayAIColorRandomAndInvalid` + 大厅页面测试 | ✅ |
+| AI v2：增量评估、置换表、VCF/VCT、迭代加深 PVS | `internal/ai`（`baseline/` 冻结 v1） | `TestPositionIncrementalMatchesRebuild` `TestVCFSoundOnRandomPositions`（最长 19 手连续冲四） `TestVCTHoldsAgainstSearch` `TestVCFDefence`；对弈 v2 hard 对 v1 hard 38:2（`docs/evidence/ai-arena-*.txt`、`ai-bench.txt`） | ✅ |
+| 观战 | PROTOCOL §11 | `TestSpectatorLifecycle` `TestSpectateFlow` `TestSpectateErrors` `TestSpectatorLeavesWhenPlaying` + 浏览器三人实测 | ✅ |
+| 棋谱存档与复盘 | PROTOCOL §12；`/replay/:id` | `TestResultRecordsMoves` `TestRecordedGameAPI` Store 契约 `TestGameRecords*` + `Replay.test.tsx` | ✅ |
+| 重启恢复（快照 + 租约 + 优雅交接） | `internal/cluster`、`hub/owner.go` | `TestClusterHandoffAndRestart`；真实进程 SIGTERM 重启 171ms 恢复人机局（`docs/evidence/cluster-drill.txt`） | ✅ |
+| 多实例与故障接管 | DESIGN §10 | `internal/cluster` 契约（内存/Redis）；`TestCluster*` 双后端；真实进程 `kill -9` 房主 ~6.5s 接管、9 手完整入谱；Docker 双实例 + Caddy 同样演练（`docs/evidence/cluster-compose.txt`）；CI `cluster-gate` | ✅ |
+| 集群开销 | — | 单机重写前后持平（p50 0.74 → 0.76ms），跨节点 p50 2.0ms（`docs/evidence/bench-cluster.txt`，BENCHMARK §7） | ✅ |
