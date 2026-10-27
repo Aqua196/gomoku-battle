@@ -408,8 +408,14 @@ func TestClusterHandoffAndRestart(t *testing.T) {
 		if g["players"].(map[string]any)["white"].(map[string]any)["isAI"] != true {
 			t.Fatalf("restored AI seat: %v", g["players"])
 		}
-		// The AI is alive after the restore.
-		send(t, a2, map[string]any{"type": "move", "x": 7, "y": 8})
+		// The AI is alive after the restore. Easy AI is noisy, so its reply
+		// may sit anywhere next to 7,7: play a cell it did not take.
+		board := g["board"].([]any)
+		x, y := 7, 8
+		if board[y].([]any)[x].(float64) != 0 {
+			x, y = 8, 7
+		}
+		send(t, a2, map[string]any{"type": "move", "x": x, "y": y})
 		waitFrame(t, a2, "game_state", func(m map[string]any) bool { return moveNo(m) == 4 })
 	})
 }
