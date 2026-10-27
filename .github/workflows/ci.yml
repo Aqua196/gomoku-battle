@@ -109,13 +109,13 @@ jobs:
         working-directory: backend
         run: >-
           DRILL_A=ws://127.0.0.1:8081/ws
-          DRILL_RESTART_A="docker compose -f ../docker-compose.cluster.yml restart app1"
+          DRILL_RESTART_A="docker compose -f $GITHUB_WORKSPACE/docker-compose.cluster.yml restart app1"
           go test -count=1 -v -run 'TestRestartDrill$' ./internal/integration/
       - name: crash failover drill (kill app2)
         working-directory: backend
         run: >-
           DRILL_A=ws://127.0.0.1:8081/ws DRILL_B=ws://127.0.0.1:8082/ws
-          DRILL_KILL_B="docker compose -f ../docker-compose.cluster.yml kill app2"
+          DRILL_KILL_B="docker compose -f $GITHUB_WORKSPACE/docker-compose.cluster.yml kill app2"
           go test -count=1 -v -run 'TestClusterDrill$' ./internal/integration/
       - name: logs
         if: failure()
